@@ -620,10 +620,6 @@ example (x y : Nat) : (x + y) * (x + y) = x * x + y * x + x * y + y * y :=
   Nat.add_assoc _ _ _ ▸ h₄
   -- Nat.add_assoc (x * x + y * x) (x * y) (y * y) ▸ h₄
 
-variable (x y : Nat) (h : x = y)
-#check congrArg (@Nat.add (x * x)) h
-#check (congrArg (fun a => a + (y * y)) (Nat.add_comm (x * y) (y * x)))
-
 -- 計算的証明
 example (a b c d e : Nat) (h1 : a = b) (h2 : b = c + 1) (h3 : c = d) (h4 : e = 1 + d) : a = e :=
   calc a
@@ -687,20 +683,20 @@ example (h₁ : x ∣ y) (h₂ : y = z) : x ∣ (2 * z) :=
 
 example (x y : Nat) : (x + y) * (x + y) = x * x + y * x + x * y + y * y :=
   calc (x + y) * (x + y)
-    _ = x * (x + y) + y * (x + y)         := Nat.add_mul x y (x + y)
-    _ = x * x + x * y + y * (x + y)       := congrArg (fun n => n + (y * (x + y))) (Nat.left_distrib ..)
-    _ = x * x + x * y + (y * x + y * y)   := congrArg (Nat.add (x * x + x * y)) (Nat.left_distrib ..)
+    _ = x * (x + y)    + y * (x + y)      := Nat.add_mul x y (x + y)
+    _ = x * x +  x * y + y * (x + y)      := congrArg (· + y * (x + y)) (Nat.left_distrib ..)
+    _ = x * x +  x * y + (y * x + y * y)  := congrArg (x * x + x * y + ·) (Nat.left_distrib ..)
     _ = x * x + (x * y + (y * x + y * y)) := Nat.add_assoc ..
-    _ = x * x + (y * x + (x * y + y * y)) := congrArg (Nat.add (x * x)) (Nat.add_left_comm (x * y) (y * x) (y * y))
-    _ = x * x + y * x + (x * y + y * y)   := Eq.symm (Nat.add_assoc (x * x) (y * x) (x * y + y * y))
-    _ = x * x + y * x + x * y + y * y     := Eq.symm (Nat.add_assoc (x * x + y * x) (x * y) (y * y))
+    _ = x * x + (y * x + (x * y + y * y)) := congrArg (x * x + ·) (Nat.add_left_comm (x * y) (y * x) (y * y))
+    _ = x * x +  y * x + (x * y + y * y)  := Eq.symm (Nat.add_assoc (x * x) (y * x) (x * y + y * y))
+    _ = x * x +  y * x +  x * y + y * y   := Eq.symm (Nat.add_assoc (x * x + y * x) (x * y) (y * y))
 
 example (x y : Nat) : (x + y) * (x + y) = x * x + y * x + x * y + y * y :=
   calc (x + y) * (x + y)
-    _ = (x + y) * x + (x + y) * y       := by rw [Nat.mul_add]
+    _ = (x + y) * x   + (x + y) * y     := by rw [Nat.mul_add]
     _ = x * x + y * x + (x + y) * y     := by rw [Nat.add_mul] -- congrArg (fun n => n + _) (Nat.add_mul ..)
     _ = x * x + y * x + (x * y + y * y) := by rw [Nat.add_mul] -- congrArg (Nat.add (x * x + y * x)) (Nat.add_mul ..)
-    _ = x * x + y * x + x * y + y * y   := by rw [←Nat.add_assoc] -- Eq.symm (Nat.add_assoc (x * x + y * x) (x * y) (y * y))
+    _ = x * x + y * x +  x * y + y * y  := by rw [←Nat.add_assoc] -- Eq.symm (Nat.add_assoc (x * x + y * x) (x * y) (y * y))
 
 example : ∃ x : Nat, x > 0 :=
   have h : 1 > 0 := Nat.zero_lt_succ 0
