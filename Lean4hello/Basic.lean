@@ -508,7 +508,7 @@ theorem my_em (p : Prop) : p ∨ ¬p :=
   )
 end classical
 
-namespace exercise
+namespace exercise3
 
 variable (p q r : Prop)
 
@@ -696,4 +696,473 @@ example : ¬(p ↔ ¬p) :=
     have hp : p := (h.mpr (fun hp => absurd hp (h.mp hp)))
     (h.mp hp) hp
 
-end exercise
+end exercise3
+
+/-
+namespace quantifiers_and_equality
+
+/-
+`p : α → Prop`：型`α`上の一変数述語
+`p x`：`x : α`に対して`p`が成り立つという主張
+
+`r : α → α → Prop`：型`α`上の二項関係
+
+`∀ x : α, p x`
+
+- `x : α`が自由に選べる文脈で`p x`の証明が与えられたら、`∀ x : α, p x`の証明を作れる
+- `∀ x : α, p x`の証明があるとき、任意の項`t : α`に対して`p t`の証明が得られる
+
+- `x : α`が自由に選べる文脈で型`β x`の項`t`が作れるなら、`(fun x : α => t) : (x : α) → β x`が作れる
+- 与えられた項`s : (x : α) → β x`から、任意の項`t : α`に対して項`s t : β t`が得られる
+
+`p x : Prop`のとき、型`(x : α) → β x`を型`∀ x : α, p x`と同一視することで、
+上記をそれぞれ同一視できる
+-/
+
+example (α : Type) (p q : α → Prop) : (∀ x : α, p x ∧ q x) → ∀ y : α, p y :=
+  fun h : ∀ x : α, p x ∧ q x => show ∀ y : α, p y from
+    fun y : α => show p y from -- `y`を任意に取る
+      have hpq : p y ∧ q y := h y -- 仮定から
+      hpq.left
+
+-- R：α上の二項関係
+variable (α : Type) (R : α → α → Prop)
+-- Rは推移的（x R y かつ y R z なら x R z）
+variable (trans_r : ∀ x y z : α, R x y → R y z → R x z)
+
+-- 任意のa,b,c : αに対して
+variable (a b c : α)
+-- a R b かつ b R c とすると...
+variable (hab : R a b) (hbc : R b c)
+
+#check trans_r
+#check trans_r a b c
+#check trans_r a b c hab
+#check trans_r a b c hab hbc -- ... a R c が成り立つ、という主張
+
+-- 省略
+variable (trans_r2 : ∀ {x y z}, R x y → R y z → R x z)
+
+#check trans_r2        -- : R ?m.2415 ?m.2416 → R ?m.2416 ?m.2417 → R ?m.2415 ?m.2417
+#check trans_r2 hab    -- : trans_r2 hab : R b ?m.2469 → R a ?m.2469
+#check trans_r2 hab hbc -- : R a c
+
+variable (Req : α → α → Prop)
+variable (refl_Req : ∀ x, Req x x)
+variable (symm_Req : ∀ {x y}, Req x y → Req y x)
+variable (trans_Req : ∀ {x y z}, Req x y → Req y z → Req x z)
+
+-- ∀ a b c d : α, (a R₌ b) ∧ (c R₌ b) ∧ (c R₌ d) → a R₌ d
+example (a b c d : α) (hab : Req a b) (hcb : Req c b) (hcd : Req c d) : Req a d :=
+  trans_Req
+    (show Req a c from trans_Req hab (symm_Req hcb))
+    (show Req c d from hcd)
+
+-- 等号
+universe u v
+#check @Eq.refl.{u} -- @Eq.refl : ∀ {α : Sort u} (a : α), a = a
+#check @Eq.symm.{u} -- @Eq.symm : ∀ {α : Sort u} {a b : α}, a = b → b = a
+#check @Eq.trans.{u} -- @Eq.trans : ∀ {α : Sort u} {a b c : α}, a = b → b = c → a = c
+
+variable (a b c d : α)
+variable (hab : a = b) (hcb : c = b) (hcd : c = d)
+example : a = d :=
+  Eq.trans (Eq.trans hab hcb.symm) hcd
+
+variable (α β : Type)
+example (f : α → β) (a : α) : (fun x => f x) a = f a := Eq.refl _
+-- (fun x => f x) ≡ f を簡約して同一視してくれる
+example (a : α) (b : β) : (a, b).1 = a := Eq.refl _
+-- (a, b).1 ≡ a を簡約して同一視してくれる
+-- (a, b) : α × β
+example : 2 + 3 = 5 := Eq.refl _
+-- 計算して同一視してくれる
+
+#check @Eq.subst.{u} -- @Eq.subst : ∀ {α : Sort u} {motive : α → Prop} {a b : α}, a = b → motive a → motive b
+
+variable (α : Type) (a b : α) (p : α → Prop)
+example (hab : a = b) (hpa : p a) : p b :=
+  Eq.subst hab hpa
+example (hab : a = b) (hpa : p a) : p b :=
+  hab.subst hpa
+example (hab : a = b) (hpa : p a) : p b :=
+  hab ▸ hpa -- `▸`は`\t`で入力できる
+example (hab : a = b) (hpb : p b) : p a :=
+  hab ▸ hpb -- 左（b）を右（a）に置き換えるのも同じ書き方でやってくれる
+
+variable (α : Type)
+variable (a b : α)
+variable (f g : α → Nat)
+variable (h₁ : a = b)
+variable (h₂ : f = g)
+
+example : f a = f b := congrArg f h₁ -- 引数の方に等号を適用
+example : f a = g a := congrFun h₂ a -- 関数の方に等号を適用
+example : f a = g b := congr h₂ h₁   -- 両方に等号を適用
+
+#check @congrArg.{u, v}
+-- @congrArg : ∀ {α : Sort u} {β : Sort v} {a₁ a₂ : α} (f : α → β), a₁ = a₂ → f a₁ = f a₂
+#check @congrFun.{u, v}
+-- @congrFun : ∀ {α : Sort u} {β : α → Sort v} {f g : (x : α) → β x}, f = g → ∀ (a : α), f a = g a
+#check @congr.{u, v}
+-- @congr : ∀ {α : Sort u} {β : Sort v} {f₁ f₂ : α → β} {a₁ a₂ : α}, f₁ = f₂ → a₁ = a₂ → f₁ a₁ = f₂ a₂
+
+example (x y : Nat) : (x + y) * (x + y) = x * x + y * x + x * y + y * y :=
+  have h₁ : (x + y) * (x + y) = (x + y) * x + (x + y) * y := Nat.left_distrib (x + y) x y
+  have h₂ : (x + y) * x = x * x + y * x := Nat.right_distrib x y x
+  have h₃ : (x + y) * y = x * y + y * y := Nat.right_distrib x y y
+  have h₄ := h₃ ▸ h₂ ▸ h₁
+  Nat.add_assoc _ _ _ ▸ h₄
+  -- Nat.add_assoc (x * x + y * x) (x * y) (y * y) ▸ h₄
+
+variable (x y : Nat) (h : x = y)
+#check congrArg (@Nat.add (x * x)) h
+#check (congrArg (fun a => a + (y * y)) (Nat.add_comm (x * y) (y * x)))
+
+-- 計算的証明
+example (a b c d e : Nat) (h1 : a = b) (h2 : b = c + 1) (h3 : c = d) (h4 : e = 1 + d) : a = e :=
+  calc a
+    _ = b     := h1                   -- a = b
+    _ = c + 1 := h2                   -- b = c + 1
+    _ = d + 1 := congrArg Nat.succ h3 -- c + 1 = d + 1
+    _ = 1 + d := Nat.add_comm _ _     -- d + 1 = 1 + d
+    _ = e     := h4.symm              -- 1 + d = e
+
+example (a b c d e : Nat) (h1 : a = b) (h2 : b = c + 1) (h3 : c = d) (h4 : e = 1 + d) : a = e :=
+  calc a
+    _ = b     := by rw [h1]
+    _ = c + 1 := by rw [h2]
+    _ = d + 1 := by rw [h3]
+    _ = 1 + d := by rw [Nat.add_comm]
+    _ = e     := by rw [h4]
+
+example (a b c d e : Nat) (h1 : a = b) (h2 : b = c + 1) (h3 : c = d) (h4 : e = 1 + d) : a = e :=
+  by rw [h1, h2, h3, Nat.add_comm, h4]
+
+example (a b c d e : Nat) (h1 : a = b) (h2 : b = c + 1) (h3 : c = d) (h4 : e = 1 + d) : a = e :=
+  by simp [h1, h2, h3, Nat.add_comm, h4]
+
+
+example (a b c d : Nat) (h1 : a = b) (h2 : b ≤ c) (h3 : c + 1 < d) : a < d :=
+  calc a
+    _ = b     := h1                 -- a = b
+    _ ≤ c     := h2                 -- b ≤ c
+    _ < c + 1 := Nat.lt_succ_self _ -- c < c + 1
+    _ < d     := h3                 -- c + 1 < d
+
+def divides (x y : Nat) : Prop := ∃ k, k * x = y
+def divides_trans {x y z : Nat} (h₁ : divides x y) (h₂ : divides y z) : divides x z :=
+  let ⟨k₁, d₁⟩ := h₁ -- k₁ : Nat , d₁ : k₁ * x = y
+  let ⟨k₂, d₂⟩ := h₂ -- k₂ : Nat , d₂ : k₂ * y = z
+  ⟨k₁ * k₂, show k₁ * k₂ * x = z from
+    calc k₁ * k₂ * x
+      _ = k₁ * (k₂ * x) := Nat.mul_assoc _ _ _
+      _ = k₂ * (k₁ * x) := Nat.mul_left_comm _ _ _
+      _ = k₂ * y        := congrArg _ d₁ -- by rw [d₁]
+      _ = z             := d₂
+    ⟩
+def divides_mul (x : Nat) (k : Nat) : divides x (k * x) := ⟨k, rfl⟩
+
+-- `calc`に推移律の定義を教える
+instance : Trans divides divides divides where
+  trans := divides_trans
+
+example (h₁ : divides x y) (h₂ : y = z) : divides x (2 * z) :=
+  calc
+    divides x y       := h₁
+    y = z             := h₂
+    divides z (2 * z) := divides_mul ..
+
+infix:50 " ∣ " => divides
+example (h₁ : x ∣ y) (h₂ : y = z) : x ∣ (2 * z) :=
+  calc x
+    _ ∣ y     := h₁
+    _ = z     := h₂
+    _ ∣ 2 * z := divides_mul ..
+
+example (x y : Nat) : (x + y) * (x + y) = x * x + y * x + x * y + y * y :=
+  calc (x + y) * (x + y)
+    _ = x * (x + y) + y * (x + y)         := Nat.add_mul x y (x + y)
+    _ = x * x + x * y + y * (x + y)       := congrArg (fun n => n + (y * (x + y))) (Nat.left_distrib ..)
+    _ = x * x + x * y + (y * x + y * y)   := congrArg (Nat.add (x * x + x * y)) (Nat.left_distrib ..)
+    _ = x * x + (x * y + (y * x + y * y)) := Nat.add_assoc ..
+    _ = x * x + (y * x + (x * y + y * y)) := congrArg (Nat.add (x * x)) (Nat.add_left_comm (x * y) (y * x) (y * y))
+    _ = x * x + y * x + (x * y + y * y)   := Eq.symm (Nat.add_assoc (x * x) (y * x) (x * y + y * y))
+    _ = x * x + y * x + x * y + y * y     := Eq.symm (Nat.add_assoc (x * x + y * x) (x * y) (y * y))
+
+example (x y : Nat) : (x + y) * (x + y) = x * x + y * x + x * y + y * y :=
+  calc (x + y) * (x + y)
+    _ = (x + y) * x + (x + y) * y       := by rw [Nat.mul_add]
+    _ = x * x + y * x + (x + y) * y     := by rw [Nat.add_mul] -- congrArg (fun n => n + _) (Nat.add_mul ..)
+    _ = x * x + y * x + (x * y + y * y) := by rw [Nat.add_mul] -- congrArg (Nat.add (x * x + y * x)) (Nat.add_mul ..)
+    _ = x * x + y * x + x * y + y * y   := by rw [←Nat.add_assoc] -- Eq.symm (Nat.add_assoc (x * x + y * x) (x * y) (y * y))
+
+example : ∃ x : Nat, x > 0 :=
+  have h : 1 > 0 := Nat.zero_lt_succ 0
+  Exists.intro 1 h -- 1 : Nat と h : 1 > 0
+
+example (x : Nat) (h : x > 0) : ∃ y, y < x :=
+  Exists.intro 0 h -- 0 : Nat と 0 < x
+
+example (x y z : Nat) (hxy : x < y) (hyz : y < z) : ∃ w, x < w ∧ w < z :=
+  Exists.intro y (show x < y ∧ y < z from ⟨hxy, hyz⟩)
+
+variable (α : Type) (p q : α → Prop)
+example (h : ∃ x : α, p x ∧ q x) : ∃ x : α, q x ∧ p x :=
+  h.elim
+    (fun w : α => fun hw : p w ∧ q w =>
+      show ∃ x : α, q x ∧ p x from ⟨w, ⟨hw.right, hw.left⟩⟩)
+
+example (h : ∃ x : α, p x ∧ q x) : ∃ x : α, q x ∧ p x :=
+  match h with
+  | ⟨(w : α), (hw : p w ∧ q w)⟩ => ⟨w, hw.right, hw.left⟩
+
+example (h : ∃ x : α, p x ∧ q x) : ∃ x : α, q x ∧ p x :=
+  match h with
+  | ⟨(w : α), (hpw : p w), (hqw : q w)⟩ => ⟨w, hqw, hpw⟩
+
+example (h : ∃ x : α, p x ∧ q x) : ∃ x : α, q x ∧ p x :=
+  let ⟨w, hpw, hqw⟩ := h
+  ⟨w, hqw, hpw⟩
+
+example : (h : ∃ x : α, p x ∧ q x) -> ∃ x : α, q x ∧ p x :=
+  fun ⟨w, hpw, hqw⟩ => ⟨w, hqw, hpw⟩
+
+def is_even (a : Nat) : Prop := ∃b : Nat, a = 2 * b
+
+example {a b : Nat} (h1 : is_even a) (h2 : is_even b) : is_even (a + b) :=
+  h1.elim fun k1 => fun hk1 : a = 2 * k1 =>
+  h2.elim fun k2 => fun hk2 : b = 2 * k2 =>
+    ⟨k1 + k2, show a + b = 2 * (k1 + k2) from
+      calc a + b
+        _ = 2 * k1 + 2 * k2 := by rw [hk1, hk2]
+        _ = 2 * (k1 + k2)   := by rw [Nat.mul_add]⟩
+
+example {a b : Nat} (h1 : is_even a) (h2 : is_even b) : is_even (a + b) :=
+  match h1, h2 with
+  | ⟨k1, (hk1 : a = 2 * k1)⟩, ⟨k2, (hk2 : b = 2 * k2)⟩ => ⟨k1 + k2, by rw [hk1, hk2, Nat.mul_add]⟩
+
+open Classical
+-- universe u
+variable (α : Sort u) (p : α → Prop)
+
+example (h : ¬ ∀ x, ¬ p x) : ∃ x, p x :=
+  byContradiction -- ¬(∃ x, p x) → False
+    fun hc : ¬∃x, p x => show False from
+      h (show ∀ (x : α), ¬p x from
+        fun x : α => fun hpx : p x => show False from
+          hc ⟨x, hpx⟩
+      )
+end quantifiers_and_equality
+-/
+
+namespace exercise4
+open Classical
+
+-- 1.
+variable (α : Type) (p q : α → Prop)
+
+example : (∀ x, p x ∧ q x) ↔ (∀ x, p x) ∧ (∀ x, q x) :=
+  Iff.intro
+    (show (∀ x, p x ∧ q x) → (∀ x, p x) ∧ (∀ x, q x) from
+      fun (h : ∀ x, p x ∧ q x) =>
+        And.intro
+          (show ∀ x, p x from
+            fun x => show p x from (h x).left)
+          (show ∀ x, q x from
+            fun x => show q x from (h x).right)
+    )
+    (show (∀ x, p x) ∧ (∀ x, q x) → (∀ x, p x ∧ q x) from
+      fun (h : (∀ x, p x) ∧ (∀ x, q x)) => show ∀ x, p x ∧ q x from
+        fun x => ⟨show p x from h.left x, show q x from h.right x⟩
+    )
+example : (∀ x, p x → q x) → (∀ x, p x) → (∀ x, q x) :=
+  fun h : ∀ x, p x → q x =>
+    fun hp : ∀ x, p x =>
+      fun x => show q x from
+        (show p x → q x from h x)
+        (show p x       from hp x)
+example : (∀ x, p x) ∨ (∀ x, q x) → ∀ x, p x ∨ q x :=
+  fun h : (∀ x, p x) ∨ (∀ x, q x) => show ∀ x, p x ∨ q x from
+    fun x => show p x ∨ q x from
+      h.elim
+        (show (∀ x, p x) → p x ∨ q x from
+          fun hp => Or.inl (show p x from hp x))
+        (show (∀ x, q x) → p x ∨ q x from
+          fun hq => Or.inr (show q x from hq x))
+
+-- 2.
+variable (α : Type) (p q : α → Prop)
+variable (r : Prop)
+
+example : α → ((∀ _ : α, r) ↔ r) :=
+  fun (a : α) => Iff.intro
+    (show (∀_ : α, r) → r from
+      fun h : (x : α) → r => show r from h a)
+    (show r → ∀_ : α, r from
+      fun hr : r => show α → r from fun _ => hr)
+example : (∀ x, p x ∨ r) ↔ (∀ x, p x) ∨ r :=
+  Iff.intro
+    (show (∀x, p x ∨ r) → (∀x, p x) ∨ r from
+      fun h : ∀x, p x ∨ r => show (∀x, p x) ∨ r from
+        byCases -- `r`かどうかで結論の型が違うので場合分け
+          (fun hr : r => Or.inr hr)
+          (fun hnr : ¬r => Or.inl (fun x => (h x).elim
+            (show p x → p x from id)
+            (show r → p x from fun hr => absurd hr hnr))))
+    (show (∀x, p x) ∨ r → ∀x, p x ∨ r from
+      fun h : (∀x, p x) ∨ r => fun x => show p x ∨ r from
+        h.elim
+          (show (∀x, p x) → p x ∨ r from fun hp => Or.inl (hp x))
+          (show r → p x ∨ r from fun hr => Or.inr hr))
+example : (∀ x, r → p x) ↔ (r → ∀ x, p x) :=
+  Iff.intro
+    (show (∀x, r → p x) → (r → ∀x, p x) from
+      fun h : ∀x, r → p x => fun r => fun x => show p x from (h x) r)
+    (show (r → ∀x, p x) → ∀x, r → p x from
+      fun h : r → ∀x, p x => fun x => fun hr => show p x from h hr x)
+
+-- 3.
+variable (men : Type) (barber : men)
+variable (shaves : men → men → Prop)
+
+example (h : ∀ x : men, shaves barber x ↔ ¬ shaves x x) : False :=
+  have ⟨
+    (h1 : shaves barber barber → ¬shaves barber barber),
+    (h2 : ¬shaves barber barber → shaves barber barber)⟩ := h barber
+  byCases
+    (fun (hp : shaves barber barber) => (h1 hp) hp)
+    (fun (hn : ¬shaves barber barber) => hn (h2 hn))
+
+-- 4.
+def even (n : Nat) : Prop := ∃x, n = 2 * x
+
+def prime (n : Nat) : Prop := n > 1 → ∀p, 1 < p ∧ p < n → (¬∃k, n = k * p)
+
+def infinitely_many_primes : Prop := ∀n : Nat, ∃p : Nat, p > n ∧ prime p
+
+def Fermat_prime (n : Nat) : Prop := prime n ∧ ∃k, n = 2 ^ 2 ^ k + 1
+
+def infinitely_many_Fermat_primes : Prop := ∀n : Nat, ∃p : Nat, p > n ∧ Fermat_prime p
+
+def goldbach_conjecture : Prop :=
+  -- 5より大きい任意の自然数は
+  ∀n : Nat, n > 5 →
+    -- 3つの素数の和で表される
+    ∃(p q r : Nat), prime p ∧ prime q ∧ prime r → n = p + q + r
+
+def Goldbach's_weak_conjecture : Prop :=
+  -- 5より大きい任意の奇数は
+  ∀n : Nat, n > 5 ∧ ¬ even n →
+    -- 3つの素数の和で表される
+    ∃(p q r : Nat), prime p ∧ prime q ∧ prime r → n = p + q + r
+
+def Fermat's_last_theorem : Prop :=
+  -- 3以上の自然数nについて
+  ∀n : Nat, n >= 3 →
+    -- xⁿ + yⁿ = zⁿ となる自然数の組 (x, y, z) は存在しない
+    ¬∃(x y z : Nat), x > 0 ∧ y > 0 ∧ z > 0 → x^n + y^n = z^n
+
+-- 5.
+variable (α : Type) (p q : α → Prop)
+variable (r : Prop)
+
+example : (∃ _ : α, r) → r :=
+  fun ⟨_, hr⟩ => hr
+example (a : α) : r → (∃ _ : α, r) :=
+  fun (hr : r) => ⟨a, hr⟩
+example : (∃ x, p x ∧ r) ↔ (∃ x, p x) ∧ r :=
+  Iff.intro
+    (show (∃x, p x ∧ r) → (∃x, p x) ∧ r from
+      fun ⟨x, (h : p x ∧ r)⟩ => ⟨show ∃x, p x from ⟨x, h.left⟩, show r from h.right⟩)
+    (show (∃x, p x) ∧ r → (∃x, p x ∧ r) from
+      fun ⟨⟨x, hpx⟩, hr⟩ => ⟨x, show p x ∧ r from ⟨hpx, hr⟩⟩)
+example : (∃ x, p x ∨ q x) ↔ (∃ x, p x) ∨ (∃ x, q x) :=
+  Iff.intro
+    (show (∃x, p x ∨ q x) → (∃x, p x) ∨ (∃x, q x) from
+      fun ⟨x, h⟩ => h.elim
+        (fun hpx => Or.inl ⟨x, hpx⟩)
+        (fun hqx => Or.inr ⟨x, hqx⟩))
+    (show (∃x, p x) ∨ (∃x, q x) → (∃x, p x ∨ q x) from
+      fun h => h.elim
+        (fun ⟨x, (hpx : p x)⟩ => ⟨x, Or.inl hpx⟩)
+        (fun ⟨x, (hqx : q x)⟩ => ⟨x, Or.inr hqx⟩))
+
+example : (∀ x, p x) ↔ ¬ (∃ x, ¬ p x) :=
+  Iff.intro
+    (show (∀x, p x) → ¬(∃x, ¬ p x) from
+      fun hp : (x : α) → p x => show (∃x, p x → False) → False from
+        fun h : ∃x, p x → False => show False from
+          h.elim
+            fun a : α => fun hpa : p a → False => show False from hpa (hp a))
+    (show ¬ (∃x, ¬ p x) → (∀x, p x) from
+      fun h : (∃x, p x → False) → False => show (x : α) → p x from
+        fun x => byContradiction
+          fun hnpx : ¬p x => show False from h ⟨x, hnpx⟩)
+example : (∃ x, p x) ↔ ¬ (∀ x, ¬ p x) :=
+  Iff.intro
+    (show (∃x, p x) → ¬(∀x, ¬p x) from
+      fun ⟨x, (hpx : p x)⟩ => show (∀x, ¬p x) → False from
+        fun hnp : (x : α) → ¬p x => show False from
+          (hnp x) hpx)
+    (show ¬(∀x, ¬p x) → ∃x, p x from
+      fun h : (∀x, p x → False) → False => show ∃x, p x from
+        byContradiction (fun hn : (∃x, p x) → False => show False from
+          h (fun x => fun hpx : p x => show False from hn (Exists.intro x hpx))))
+example : (¬ ∃ x, p x) ↔ (∀ x, ¬ p x) :=
+  Iff.intro
+    (show (¬∃x, p x) → ∀x, ¬p x from
+      fun h : (∃x, p x) → False => fun x => show p x → False from
+        fun hpx : p x => show False from h (Exists.intro x hpx))
+    (show (∀x, ¬p x) → ¬∃x, p x from
+      fun hnp : ∀x, ¬p x => fun ⟨x, hpx⟩ => show False from absurd hpx (hnp x))
+example : (¬ ∀ x, p x) ↔ (∃ x, ¬ p x) :=
+  Iff.intro
+    (show (¬∀x, p x) → ∃x, ¬p x from
+      fun h : (∀x, p x) → False => show ∃x, ¬p x from
+        byContradiction fun hn : ¬∃x, ¬p x => show False from
+          -- (¬∃x, ¬p x) → ∀x, p x
+          have hp : ∀x, p x := fun x => show p x from
+            byContradiction fun hnpx : ¬p x => show False from
+              hn (Exists.intro x hnpx)
+          h hp)
+    (show (∃x, ¬p x) → ¬∀x, p x from
+      fun ⟨a, (hnpa : ¬p a)⟩ => fun hp : ∀x, p x => show False from
+        hnpa (hp a))
+
+example : (∀ x, p x → r) ↔ (∃ x, p x) → r :=
+  Iff.intro
+    (show (∀x, p x → r) → (∃x, p x) → r from
+      fun h : (x : α) → p x → r => fun ⟨a, hpa⟩ => show r from
+        h a hpa)
+    (show ((∃x, p x) → r) → ∀x, p x → r from
+      fun h : ((∃x, p x) → r) => fun x => fun hpx : p x => show r from
+        h (Exists.intro x hpx))
+example (a : α) : (∃ x, p x → r) ↔ (∀ x, p x) → r :=
+  Iff.intro
+    (show (∃x, p x → r) → (∀x, p x) → r from
+      fun ⟨t, (hptr : p t → r)⟩ => fun hp : (x : α) → p x => show r from
+        hptr (hp t))
+    (show ((∀x, p x) → r) → (∃x, p x → r) from
+      fun h : (∀x, p x) → r => show ∃x, p x → r from
+        byCases -- `∀x, p x`を仮定したい気持ち...?
+          (fun hp : ∀x, p x => Exists.intro a (fun _ : p a => show r from h hp))
+          (fun hnp : ¬∀x, p x => byContradiction fun hnex : ¬∃x, p x → r => show False from
+            hnp (show (x : α) → p x from
+              fun x => byContradiction fun hnpx : ¬p x => show False from
+                hnex ⟨x, (fun hpx : p x => show r from absurd hpx hnpx)⟩)))
+
+example (a : α) : (∃ x, r → p x) ↔ (r → ∃ x, p x) :=
+  Iff.intro
+    (show (∃x, r → p x) → (r → ∃x, p x) from
+      fun ⟨x, (hrpx : r → p x)⟩ => fun hr : r => show ∃x, p x from
+        Exists.intro x (show p x from hrpx hr))
+    (show (r → ∃x, p x) → (∃x, r → p x) from
+      fun hrex : r → ∃x, p x => show ∃x, r → p x from
+        byCases -- `∃x, p x`が欲しい
+          (fun hex : ∃x, p x => have ⟨x, hpx⟩ := hex
+            ⟨x, show r → p x from fun _ => hpx⟩)
+          (fun hnex : ¬∃x, p x =>
+            ⟨a, show r → p a from fun hr => absurd (hrex hr) hnex⟩))
+
+end exercise4
