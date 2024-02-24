@@ -755,3 +755,559 @@ example (h : ¬ ∀ x, ¬ p x) : ∃ x, p x :=
           hc ⟨x, hpx⟩
       )
 end quantifiers_and_equality
+
+namespace inductive_types
+
+/-
+基礎型：foundational type
+* 型宇宙 Sort u ... Prop, Type, Type 1, ...
+* 依存関数型 (x : α) → β
+
+帰納型：inductive type
+-/
+universe u
+#check Sort 0 -- Prop : Type
+#check Sort 1 -- Type : Type 1
+#check Sort u -- Sort u : Type u
+#check Type u -- Type u : Type (u + 1)
+
+-- 列挙型 enumerated types
+inductive Weekday where
+  | sun : Weekday
+  | mon : Weekday
+  | tue : Weekday
+  | wed : Weekday
+  | thu : Weekday
+  | fri : Weekday
+  | sat : Weekday
+  deriving Repr
+
+-- `deriving Repr`すると
+#eval Weekday.sun -- inductive_types.Weekday.sun
+
+#check Weekday.sun -- : Weekday
+#check Weekday.mon -- : Weekday
+
+section
+open Weekday
+#check tue -- : Weekday
+end
+
+#check Weekday.rec
+
+def numberOfDay (d : Weekday) : Nat :=
+  open Weekday in
+  match d with
+  | sun => 0
+  | mon => 1
+  | tue => 2
+  | wed => 3
+  | thu => 4
+  | fri => 5
+  | sat => 6
+
+#eval numberOfDay Weekday.sun -- 0
+#eval numberOfDay Weekday.mon -- 1
+#eval numberOfDay Weekday.sat -- 6
+
+section
+set_option pp.all true
+#print numberOfDay
+-- fun (d : inductive_types.Weekday) =>
+--   inductive_types.numberOfDay.match_1.{1}
+--     (fun (d : inductive_types.Weekday) => Nat)
+--     d
+--     (fun (_ : Unit) => @OfNat.ofNat.{0} Nat 0 (instOfNatNat 0))
+--     (fun (_ : Unit) => @OfNat.ofNat.{0} Nat 1 (instOfNatNat 1))
+--     (fun (_ : Unit) => @OfNat.ofNat.{0} Nat 2 (instOfNatNat 2))
+--     (fun (_ : Unit) => @OfNat.ofNat.{0} Nat 3 (instOfNatNat 3))
+--     (fun (_ : Unit) => @OfNat.ofNat.{0} Nat 4 (instOfNatNat 4))
+--     (fun (_ : Unit) => @OfNat.ofNat.{0} Nat 5 (instOfNatNat 5))
+--     (fun (_ : Unit) => @OfNat.ofNat.{0} Nat 6 (instOfNatNat 6))
+/- `deriving Repr`していると違う関数になっていてエラー
+#print numberOfDay.match_1
+-- def inductive_types.numberOfDay.match_1.{u_1} : ... :=
+--   fun (motive : inductive_types.Weekday → Sort u_1)
+--       (d : inductive_types.Weekday)
+--       (h_1 : Unit → motive inductive_types.Weekday.sun)
+--       (h_2 : Unit → motive inductive_types.Weekday.mon)
+--       (h_3 : Unit → motive inductive_types.Weekday.tue)
+--       (h_4 : Unit → motive inductive_types.Weekday.wed)
+--       (h_5 : Unit → motive inductive_types.Weekday.thu)
+--       (h_6 : Unit → motive inductive_types.Weekday.fri)
+--       (h_7 : Unit → motive inductive_types.Weekday.sat) =>
+--     @inductive_types.Weekday.casesOn.{u_1}
+--       (fun (x : inductive_types.Weekday) => motive x)
+--       d
+--       (h_1 Unit.unit)
+--       (h_2 Unit.unit)
+--       (h_3 Unit.unit)
+--       (h_4 Unit.unit)
+--       (h_5 Unit.unit)
+--       (h_6 Unit.unit)
+--       (h_7 Unit.unit)
+-/
+#print Weekday.casesOn
+-- fun {motive : inductive_types.Weekday → Sort u} (t : inductive_types.Weekday) ... =>
+--   @inductive_types.Weekday.rec.{u} motive sun mon tue wed thu fri sat t
+#check @Weekday.rec
+-- @inductive_types.Weekday.rec.{u_1} :
+--   {motive : inductive_types.Weekday → Sort u_1} →
+--   motive inductive_types.Weekday.sun →
+--   motive inductive_types.Weekday.mon →
+--   motive inductive_types.Weekday.tue →
+--   motive inductive_types.Weekday.wed →
+--   motive inductive_types.Weekday.thu →
+--   motive inductive_types.Weekday.fri →
+--   motive inductive_types.Weekday.sat →
+--   (t : inductive_types.Weekday) → motive t
+#check @Weekday.recOn
+-- `t : Weekday`の引数が先にくる版
+end
+
+namespace Weekday -- 型と同じ名前
+
+/-- 次の曜日 -/
+def next (d : Weekday) : Weekday :=
+  match d with
+  | sun => mon
+  | mon => tue
+  | tue => wed
+  | wed => thu
+  | thu => fri
+  | fri => sat
+  | sat => sun
+
+/-- 前の曜日 -/
+def prev (d : Weekday) : Weekday :=
+  match d with
+  | sun => sat
+  | mon => sun
+  | tue => mon
+  | wed => tue
+  | thu => wed
+  | fri => thu
+  | sat => fri
+
+#eval next mon -- tue
+#eval next (next tue) -- thu
+#eval next (prev tue) -- tue
+
+example : next (prev tue) = tue := rfl
+
+example (d : Weekday) : next (prev d) = d :=
+  match d with
+  | sun => rfl
+  | mon => rfl
+  | tue => rfl
+  | wed => rfl
+  | thu => rfl
+  | fri => rfl
+  | sat => rfl
+
+example (d : Weekday) : next (prev d) = d := by
+  cases d    -- `cases`タクティク：仮説を分解
+  repeat rfl -- `repeat`タクティク：同じタクティクを（失敗するまで）適用
+
+example (d : Weekday) : next (prev d) = d := by
+  cases d <;> rfl
+  -- `tac1 <;> tac2`：tac1をゴールに適用して、生成されたサブゴールそれぞれにtac2を適用
+end Weekday
+
+-- 引数を取る
+inductive Prod (α : Type u) (β : Type v)
+  | mk : α → β → Prod α β
+
+inductive Sum (α : Type u) (β : Type v)
+  | inl : α → Sum α β
+  | inr : β → Sum α β
+
+def fst (p : Prod α β) : α :=
+  match p with
+  | Prod.mk a _ => a
+def snd (p : Prod α β) : β :=
+  match p with
+  | Prod.mk _ b => b
+
+def prod_example (p : Prod Bool Nat) : Nat :=
+  Prod.casesOn
+    -- (motive := fun _ => Nat) -- 構築したい項の型を指定する関数
+    p
+    (fun (b : Bool) (n : Nat) => cond b (2 * n) (2 * n + 1))
+#eval prod_example (Prod.mk true  2)  -- 4
+#eval prod_example (Prod.mk false 2)  -- 5
+
+def sum_example (s : Sum Bool Nat) : Nat :=
+  Sum.casesOn
+    -- (motive := fun _ => Nat)
+    s
+    (fun _ : Bool => 0)
+    (fun n : Nat  => n + 1)
+
+def sum_example2 (s : Sum Bool Nat) : Nat :=
+  match s with
+  | .inl _ => 0
+  | .inr (n : Nat) => n + 1
+
+structure MyProd (α : Type u) (β : Type v) where
+  mk :: (fst : α) (snd : β)
+
+-- `structure`によって以下が定義される
+#check @MyProd    -- : Type u_1 → Type u_2 → Type (max u_1 u_2)
+#check @MyProd.mk -- : {α : Type u_1} → {β : Type u_2} → α → β → MyProd α β
+#check @MyProd.rec
+-- : {α : Type u_2} →
+--   {β : Type u_3} →
+--   {motive : MyProd α β → Sort u_1} →
+--   ((fst : α) → (snd : β) → motive { fst := fst, snd := snd }) →
+--   (t : MyProd α β) → motive t
+#check @MyProd.recOn
+-- : {α : Type u_2} →
+--   {β : Type u_3} →
+--   {motive : MyProd α β → Sort u_1} →
+--   (t : MyProd α β) →
+--   ((fst : α) → (snd : β) → motive { fst := fst, snd := snd }) → motive t
+#check @MyProd.fst -- : {α : Type u_1} → {β : Type u_2} → MyProd α β → α
+#check @MyProd.snd -- : {α : Type u_1} → {β : Type u_2} → MyProd α β → β
+
+structure Color where
+  (red : Nat) (green : Nat) (blue : Nat)
+  deriving Repr
+
+-- コンストラクタの名前はデフォルトで`mk`になる
+def yellow := Color.mk 255 255 0
+
+#print Color.red -- Color.red : Color → Nat := fun self => self.1
+#eval Color.red yellow -- 255
+
+structure Semigroup where
+  carrier : Type u
+  mul : carrier → carrier → carrier
+  mul_assoc : ∀ a b c, mul (mul a b) c = mul a (mul b c)
+
+inductive Sigma {α : Type u} (β : α → Type v) where
+  | mk : (a : α) → β a → Sigma β
+structure MySigma {α : Type u} (β : α → Type v) where
+  a : α
+  b : β a
+
+-- 出来上がるコンストラクタの型は同じ
+#check @Sigma.mk   -- : {α : Type u_1} → {β : α → Type u_2} → (a : α) → β a → Sigma β
+#check @MySigma.mk -- : {α : Type u_1} → {β : α → Type u_2} → (a : α) → β a → MySigma β
+
+#check @MySigma.a -- : {α : Type u_1} → {β : α → Type u_2} → MySigma β → α
+#check @MySigma.b -- : {α : Type u_1} → {β : α → Type u_2} → (self : MySigma β) → β self.a
+
+inductive Option (α : Type u) where
+  | none
+  | some : α → Option α
+structure MyOption (α : Type u) where
+  none : Option α     -- 型は省略できない
+  some : α → Option α
+
+/-
+依存型理論の意味論において、関数は全域。
+　　関数型 `α → β`
+依存関数型 `(a : α) → β`
+どちらも任意の入力に対して一意の出力を持つ。
+
+部分関数は`Option`によって表現できる：
+`f : α → Option β`
+は`α`から`β`への部分関数とみなせる。
+定義されない`α`型の項`a`に対しては`none`とすればよい。
+-/
+
+inductive Inhabited (α : Type u) where
+  | mk : α → Inhabited α
+structure MyInhabited (α : Type u) where
+  a : α
+
+-- `Inhabited α`型の項は`α`の項が存在する証拠となる。
+-- `Inhabited`は型クラス type class
+
+-- 集合の内包表記 Subtype
+#check { x : Nat // x % 2 = 0 } -- : Type
+#check Subtype (fun x : Nat => x % 2 = 0) -- { x // x % 2 = 0 } : Type
+
+example : ∀ n : { x : Nat // 1 <= x ∧ x <= 2 }, n.val = 1 ∨ n.val = 2 :=
+  fun n =>
+    have ⟨(h1 : 1 <= n.val), (h2 : n.val <= 2)⟩ := n.property
+    (Nat.eq_or_lt_of_le h1).elim
+      (fun h1eqn : 1 = n.val => Or.inl h1eqn.symm)
+      (fun h1ltn : 1 < n.val => -- n.val > 1 = ¬ n.val <= 1
+        (Nat.eq_or_lt_of_le h2).elim
+          (fun hneq2 : n.val = 2 => Or.inr hneq2)
+          (fun hnlt2 : n.val < 2 => -- n.val <= 1
+            absurd
+              (show  n.val <= 1 from Nat.le_of_lt_succ hnlt2)
+              (show ¬n.val <= 1 from Nat.not_le_of_gt h1ltn)
+          )
+      )
+
+namespace Hidden
+inductive Nat where
+  | zero : Nat
+  | succ : Nat → Nat
+  deriving Repr
+
+#check @Nat.rec
+-- @Nat.rec :
+--   {motive : Nat → Sort u_1} →
+--   motive Nat.zero →
+--   ((a : Nat) → motive a → motive (Nat.succ a)) →
+--   (t : Nat) → motive t
+
+namespace Nat
+
+def add (n m : Nat) : Nat :=
+  match m with
+  | Nat.zero   => n
+  | Nat.succ m => Nat.succ (add n m)
+
+instance : Add Nat where
+  add := add
+
+theorem add_zero (n : Nat) : n + zero = n := rfl
+theorem add_succ (n m : Nat) : n + succ m = succ (n + m) := rfl
+
+theorem zero_add (n : Nat) : zero + n = n :=
+  Nat.recOn n -- `n`についての帰納法
+    -- (motive := fun n => zero + n = n)
+    -- Basis: `zero`で成り立つ
+    (show zero + zero = zero from rfl)
+    -- Induction step: `n`で成り立つとき`succ n`で成り立つ
+    (fun (n : Nat) (h : zero + n = n) => show zero + succ n = succ n from
+      calc zero + succ n
+        _ = succ (zero + n) := rfl       -- `add`の定義そのまま
+        _ = succ n          := by rw [h] -- congrArg succ h
+    )
+
+theorem add_assoc (n m l : Nat) : n + m + l = n + (m + l) :=
+  Nat.recOn l -- `add`は2番目の引数に関する帰納法で定義されているから...
+    -- Basis: `zero`のとき
+    (show (n + m) + zero = n + (m + zero) from rfl)
+    -- Induction step: `l`で成り立つとき`succ l`で成り立つ
+    (fun (l : Nat) (h : n + m + l = n + (m + l)) => show n + m + succ l = n + (m + succ l) from
+      calc (n + m) + succ l
+        _ = succ (n + m + l)   := rfl       -- `add`の定義から
+        _ = succ (n + (m + l)) := by rw [h] -- congrArg succ h
+        _ = n + succ (m + l)   := rfl       -- `add`の定義（を逆に使って）
+        _ = n + (m + succ l)   := rfl       -- もう一回
+    )
+
+theorem add_comm (n m : Nat) : n + m = m + n :=
+  Nat.recOn m
+    -- Basis: `zero`のとき
+    (show n + zero = zero + n from
+      calc n + zero
+        _ = n        := rfl              -- `add`の定義
+        _ = zero + n := by rw [zero_add] -- (zero_add n).symm -- 上で示したやつ
+    )
+    -- Induction step: `m`で成り立つとき`succ m`で成り立つ
+    (fun (m : Nat) (h : n + m = m + n) => show n + succ m = succ m + n from
+      calc n + succ m
+        _ = succ (n + m) := rfl       -- 定義
+        _ = succ (m + n) := by rw [h] -- congrArg succ h -- 帰納法の仮定
+        _ = succ m + n   :=
+          have (n m : Nat) : succ n + m = succ (n + m) :=
+            Nat.recOn m
+              (show succ n + zero = succ (n + zero) from rfl)
+              (fun m (h : succ n + m = succ (n + m)) => show succ n + succ m = succ (n + succ m) from
+                calc succ n + succ m
+                  _ = succ (succ n + m)   := rfl
+                  _ = succ (succ (n + m)) := by rw [h] -- congrArg succ h
+                  _ = succ (n + succ m)   := rfl
+              )
+          by rw [this] -- (this ..).symm
+    )
+
+end Nat
+
+inductive List (α : Type u)
+  | nil  : List α
+  | cons : α → List α → List α
+
+namespace List
+
+def append (as bs : List α) : List α :=
+  match as with
+  | nil       => bs
+  | cons a as => cons a (append as bs)
+
+theorem nil_append (as : List α) : append nil as = as :=
+  rfl -- `append`の`as`が`nil`のパターン
+
+theorem cons_append (a : α) (as bs : List α) : append (cons a as) bs = cons a (append as bs) :=
+  rfl -- `append`の`as`が`cons a as`のパターン
+
+end List
+end Hidden
+
+def f (n : Nat) : Nat := by
+  cases n
+  exact 3 -- n = zero   => f zero = 3
+  exact 7 -- n = succ _ => f (succ _) = 7
+
+example : f 0 = 3 := rfl
+example : f 1 = 7 := rfl
+example : f 5 = 7 := rfl
+
+#print f
+-- def inductive_types.f : Nat → Nat :=
+-- fun n => Nat.casesOn (motive := fun t => n = t → Nat) n
+--   (fun h => 3)
+--   (fun n_1 h => 7)
+--   (_ : n = n)
+
+-- n項タプル
+def Tuple (α : Type) (n : Nat) :=
+  { as : List α // as.length = n } -- 部分集合
+
+def g {n : Nat} (t : Tuple α n) : Nat := by
+  cases n
+  exact 3 -- t : Tuple α zero     => g t = 3
+  exact 7 -- t : Tuple α (succ _) => g t = 7
+
+def myTuple : Tuple Nat 3 :=
+  ⟨[0, 1, 2], show [0, 1, 2].length = 3 from rfl⟩
+example : g myTuple = 7 := rfl
+
+def myNilTuple : Tuple Nat 0 :=
+  ⟨[], show [].length = 0 from rfl⟩
+example : g myNilTuple = 3 := rfl
+
+inductive Foo
+  | bar1 : Nat → Nat → Foo
+  | bar2 : Nat → Nat → Nat → Foo
+
+def silly (x : Foo) : Nat := by
+  cases x with
+  | bar1 a b   => exact b
+  | bar2 a b c => exact c
+#eval silly (Foo.bar1 1 2)   -- 2
+#eval silly (Foo.bar2 3 3 4) -- 4
+
+example (p : Nat → Prop) (hz : p 0) (hs : ∀n, p (Nat.succ n)) (m k : Nat)
+        : p (m + 3 * k) := by
+  cases m + 3 * k
+  case zero   => exact hz
+  case succ n => apply hs -- exact (hs n)
+
+example (p : Nat → Prop) (hz : p 0) (hs : ∀n, p (Nat.succ n)) (m k : Nat)
+        : p (m + 3 * k) := by
+  induction m + 3 * k
+  case zero   => exact hz
+  case succ _ => apply hs
+
+example (p : Prop) (n m : Nat) (h1 : n < m → p) (h2 : n ≥ m → p) : p := by
+  cases Nat.lt_or_ge n m
+  case inl hlt => exact h1 hlt
+  case inr hge => exact h2 hge
+
+#check Nat.decEq -- Nat.decEq (n m : Nat) : Decidable (n = m)
+theorem t1 (n m : Nat) : n - m = 0 ∨ n ≠ m := by
+  cases Decidable.em (n = m) -- 古典論理の排中律を必要としない
+  case inl heq => rw [heq]; apply Or.inl; exact Nat.sub_self _
+  case inr hne => apply Or.inr; exact hne
+#print axioms t1
+-- 'inductive_types.t1' does not depend on any axioms
+
+example (n m : Nat) : n - m = 0 ∨ n ≠ m :=
+  Or.elim (Decidable.em (n = m))
+    (fun heq : n = m => Or.inl (show n - m = 0 from
+      calc n - m
+        _ = n - n := by rw [heq]          -- congrArg (n - ·) heq.symm
+        _ = 0     := by rw [Nat.sub_self] -- Nat.sub_self n
+    ))
+    (fun hne : n ≠ m => Or.inr hne)
+
+example (n m k : Nat) (h : Nat.succ (Nat.succ n) = Nat.succ (Nat.succ m))
+        : n + k = m + k := by
+  injection h  with h'  -- h'  : Nat.succ n = Nat.succ m
+  injection h' with h'' -- h'' : n = m
+  rw [h'']
+
+example (m n : Nat) (h : Nat.succ m = 0) : n = n + 7 := by
+  injection h -- Nat.succ _ と Nat.zero は等しくなりえない！
+
+namespace Hidden
+-- 帰納族 inductive family
+-- 添字付きの帰納型
+
+-- 要素数nの、α型の項を持つベクトル
+inductive Vector (α : Type u) : Nat → Type u
+  | nil  : Vector α Nat.zero
+  | cons : α → {n : Nat} → Vector α n → Vector α (Nat.succ n)
+
+-- 等式型 `a = a` の定義
+inductive Eq {α : Sort u} (a : α) : α → Prop
+  | refl : Eq a a
+
+#check @Eq.rec
+-- @Eq.rec :
+--   {α : Sort u_2} →
+--   {a : α} →
+--   {motive : (a_1 : α) → Eq a a_1 → Sort u_1} →
+--   motive a (_ : Eq a a) →
+--   {a_1 : α} →
+--   (t : Eq a a_1) → motive a_1 t
+
+theorem subst1 {α : Type u} {a b : α} {p : α → Prop} (h1 : Eq a b) (h2 : p a) : p b :=
+  Eq.recOn h1 h2
+
+theorem subst2 {α : Type u} {a b : α} {p : α → Prop} (h1 : Eq a b) (h2 : p a) : p b :=
+  match h1 with
+  | Eq.refl => h2
+
+theorem symm {a b : α} (h : Eq a b) : Eq b a :=
+  match h with
+  | Eq.refl => Eq.refl
+
+theorem trans {a b c : α} (h1 : Eq a b) (h2 : Eq b c) : Eq a c :=
+  Eq.recOn h2 h1
+  -- b = c を使って a = b を書き換えると a = c
+
+theorem congr {a b : α} (f : α → β) (h : Eq a b) : Eq (f a) (f b) :=
+  Eq.recOn h (@Eq.refl β (f a))
+  -- a = b を使って Eq (f a) (f a) を書き換えると Eq (f a) (f b)
+
+end Hidden
+
+mutual
+  inductive Even : Nat → Prop
+    | even_zero : Even 0
+    | even_succ : (n : Nat) → Odd n → Even (n + 1)
+
+  inductive Odd : Nat → Prop
+    | odd_succ : (n : Nat) → Even n → Odd (n + 1)
+end
+
+example : Even 0 := Even.even_zero
+example : Even 2 := Even.even_succ 1 (Odd.odd_succ 0 Even.even_zero)
+
+-- 各頂点が α の項でラベル付けされた有限木
+mutual
+  inductive Tree (α : Type u)
+    | node : α → TreeList α → Tree α
+
+  inductive TreeList (α : Type u)
+    | nil  : TreeList α
+    | cons : Tree α → TreeList α → TreeList α
+end
+
+example : Tree Nat := Tree.node 0 TreeList.nil
+example : Tree Nat := Tree.node 0 (TreeList.cons (Tree.node 1 TreeList.nil) TreeList.nil)
+example : Tree Nat := Tree.node 0 (TreeList.cons (Tree.node 1 TreeList.nil) (TreeList.cons (Tree.node 2 TreeList.nil) TreeList.nil))
+example : Tree Nat := Tree.node 0 (TreeList.cons (Tree.node 1 (TreeList.cons (Tree.node 2 TreeList.nil) TreeList.nil)) TreeList.nil)
+-- example : TreeList Nat := TreeList.nil
+-- example : TreeList Nat := TreeList.cons (Tree.node 0 TreeList.nil) TreeList.nil
+-- example : TreeList Nat := TreeList.cons (Tree.node 0 TreeList.nil) (TreeList.cons (Tree.node 1 TreeList.nil) TreeList.nil)
+-- example : TreeList Nat := TreeList.cons (Tree.node 0 (TreeList.cons (Tree.node 2 TreeList.nil) TreeList.nil)) TreeList.nil
+
+-- `TreeList α`が`List (Tree α)`と「同型」であることは示せるらしい
+
+-- 入れ子帰納型
+inductive MyTree (α : Type u)
+  | mk : α → List (MyTree α) → MyTree α
+
+end inductive_types

@@ -3,3 +3,4 @@
 import «Lean4hello».Basic
 import «Lean4hello».Chapter3
 import «Lean4hello».Chapter4
+import «Lean4hello».Chapter7
