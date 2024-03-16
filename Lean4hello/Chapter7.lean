@@ -215,19 +215,19 @@ theorem add_comm (n m : Nat) : n + m = m + n :=
 end Nat
 
 inductive List (α : Type u) where
-| nil  : List α
-| cons : α → List α → List α
+  | nil  : List α
+  | cons : α → List α → List α
 
 namespace List
 def append (as bs : List α) : List α :=
- match as with
- | nil       => bs
- | cons a as => cons a (append as bs)
+  match as with
+  | nil       => bs
+  | cons a as => cons a (append as bs)
 theorem nil_append (as : List α) : append nil as = as :=
- rfl
+  rfl
 theorem cons_append (a : α) (as bs : List α)
                     : append (cons a as) bs = cons a (append as bs) :=
- rfl
+  rfl
 
 -- 以下の定理を証明せよ
 theorem append_nil (as : List α) : append as nil = as :=
