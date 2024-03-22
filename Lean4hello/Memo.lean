@@ -1311,3 +1311,938 @@ inductive MyTree (α : Type u)
   | mk : α → List (MyTree α) → MyTree α
 
 end inductive_types
+
+namespace induction_and_recursion
+
+/-
+等式コンパイラ equation compiler
+-/
+
+/-
+パターンマッチング
+-/
+open Nat
+
+def sub1 : Nat → Nat
+  | 0   /- zero   -/ => zero
+  | n+1 /- succ n -/ => n
+
+-- 定義から成り立つ：
+example           : sub1 0 = 0        := rfl
+example (n : Nat) : sub1 (succ n) = n := rfl
+
+example : sub1 7 = 6 := rfl
+
+def isZero : Nat → Bool
+  | 0   /- zero   -/ => true
+  | _+1 /- succ _ -/ => false
+
+example           : isZero 0        = true  := rfl
+example (n : Nat) : isZero (succ n) = false := rfl
+
+example (n : Nat) : isZero (n + 3) = false := rfl
+
+-- 他の帰納型に対する例
+def swap : α × β → β × α
+  | (a, b) => (b, a)
+
+def foo : Nat × Nat → Nat
+  | (n, m) => n + m
+
+def bar : Option Nat → Nat
+  | none   => 0
+  | some n => n + 1
+
+-- 場合分けによる証明にパターンマッチングを使う
+namespace Hidden
+def not : Bool → Bool
+  | false => true
+  | true  => false
+
+theorem not_not : ∀ b : Bool, not (not b) = b
+  | false => rfl -- `not (not false) = false`
+  | true  => rfl -- `not (not true)  = true`
+
+theorem not_not' : (b : Bool) → not (not b) = b
+  | false => rfl
+  | true  => rfl
+end Hidden
+
+-- 命題の分解にパターンマッチング
+example (p q : Prop) : p ∧ q → q ∧ p
+  | .intro hp hq => And.intro hq hp
+
+example (p q : Prop) : p ∨ q → q ∨ p
+  | .inl hp => Or.inr hp
+  | .inr hq => Or.inl hq
+
+-- 入れ子になったコンストラクタを含む例
+def sub2 : Nat → Nat
+  | 0   => 0 -- zero
+  | 1   => 0 -- succ  zero
+  | n+2 => n -- succ (succ n)
+
+example : sub2 0 = 0 := rfl
+example : sub2 1 = 0 := rfl
+example : sub2 (x+2) = x := rfl
+
+example : sub2 5 = 3 := rfl
+
+#print sub2
+/-
+def induction_and_recursion.sub2 : Nat → Nat :=
+fun x =>
+  match x with
+  | 0 => 0
+  | 1 => 0
+  | succ (succ n) => n
+-/
+
+example (p q : α → Prop)
+        : (∃x, p x ∨ q x) → (∃x, p x) ∨ (∃x, q x)
+  | Exists.intro x (Or.inl hpx) => Or.inl (Exists.intro x hpx)
+  | Exists.intro x (Or.inr hqx) => Or.inr (Exists.intro x hqx)
+
+def foo2 : Nat × Nat → Nat
+  | (0,   _)   => 0
+  | (_+1, 0)   => 1
+  | (_+1, _+1) => 2
+
+def foo2' : Nat → Nat → Nat
+  | 0  , _   => 0
+  | _+1, 0   => 1
+  | _+1, _+1 => 2
+
+-- a :: as ≡ cons a as
+def bar2 : List Nat → List Nat → Nat
+  | [],     []     => 0
+  | a :: _, []     => a
+  | [],     b :: _ => b
+  | a :: _, b :: _ => a + b
+
+-- ケース（パターン）に第2引数が含まれているが、場合分けは最初の引数のみで行われる
+namespace Hidden
+def and : Bool → Bool → Bool
+  | true,  b => b
+  | false, _ => false
+
+def or : Bool → Bool → Bool
+  | true,  _ => true
+  | false, b => b
+
+def cond : Bool → α → α → α
+  | true,  x, _ => x
+  | false, _, y => y
+end Hidden
+
+-- パターン中の `_` はワイルドカード
+-- 関数で暗黙の引数を表すものとは異なる
+
+-- コロンの前に置いたパラメータはパターンマッチングに参加しない
+--                     ↓ここのコロン
+def tail1 {α : Type u} : List α → List α
+  | []            => []
+  | _head :: tail => tail
+
+def tail1' : {α : Type u} → List α → List α
+  | _α, []       => []
+  | _α, _a :: as => as
+-- α は場合分けに参加していない
+
+def foo' : Nat → Nat → Nat
+  |  0, _n => 0
+  | _m,  0 => 1
+  | _m, _n => 2
+-- Leanは上からパターンマッチングを試す
+-- `0 0` はどのケースにもマッチするが、実際には最初のケースにマッチする
+example : foo' 0     0     = 0 := rfl
+example : foo' 0     (n+1) = 0 := rfl
+example : foo' (m+1) 0     = 1 := rfl
+example : foo' (m+1) (n+1) = 2 := rfl
+
+-- 不完全なパターンマッチング
+def f1 : Nat → Nat → Nat
+  | 0, _ => 1
+  | _, 0 => 2
+  | _, _ => Inhabited.default -- 不完全なケース
+
+example : f1 0     0     = 1       := rfl
+example : f1 0     (a+1) = 1       := rfl
+example : f1 (a+1) 0     = 2       := rfl
+example : f1 (a+1) (b+1) = default := rfl
+
+-- Optionを使うやり方 cf. 部分関数
+def f2 : Nat → Nat → Option Nat
+  | 0, _ => some 1
+  | _, 0 => some 2
+  | _, _ => none   -- 不完全なケース
+
+example : f2 0     0     = some 1 := rfl
+example : f2 0     (a+1) = some 1 := rfl
+example : f2 (a+1) 0     = some 2 := rfl
+example : f2 (a+1) (b+1) = none   := rfl
+
+def foo3 : Char → Nat
+  | 'A' => 1
+  | 'B' => 2
+  | _   => 3
+
+#print foo3
+#print foo3.match_1
+/-
+-- if-then-elseにコンパイルされた：
+def induction_and_recursion.foo3.match_1.{u_1} : (motive : Char → Sort u_1) →
+  (x : Char) → (Unit → motive (Char.ofNat 65)) → (Unit → motive (Char.ofNat 66)) → ((x : Char) → motive x) → motive x :=
+fun motive x h_1 h_2 h_3 =>
+  if h_1_1 : x = Char.ofNat 65 then (_ : Char.ofNat 65 = x) ▸ (_ : Char.ofNat 65 = x) ▸ h_1 ()
+  else
+    if h_2_1 : x = Char.ofNat 66 then
+      Eq.ndrec (motive := fun x => ¬x = Char.ofNat 65 → motive x) (fun h_1 => (_ : Char.ofNat 66 = x) ▸ h_2 ())
+        (_ : Char.ofNat 66 = x) h_1_1
+    else h_3 x
+-/
+
+-- 等式コンパイラを使ってNatを定義
+open Nat
+def add : Nat → Nat → Nat
+  | n, zero   => n
+  | n, succ m => succ (add n m)
+
+theorem add_zero (n : Nat) : add n zero = n := rfl
+theorem add_succ (n m : Nat) : add n (succ m) = succ (add n m) := rfl
+
+theorem zero_add : ∀n, add zero n = n -- (n : Nat) → add zero n = n
+  | zero   => rfl
+  | succ m => congrArg succ (zero_add m)
+-- `succ m`の`m`に対して再帰的に`zero_add`を使っている
+
+def mul : Nat → Nat → Nat
+  | _, zero => zero
+  | n, succ m => add (mul n m) n
+
+theorem mul_zero (n : Nat) : mul n zero = zero := rfl
+theorem mul_succ (n m : Nat) : mul n (succ m) = add (mul n m) n := rfl
+
+def add' (n : Nat) : Nat → Nat
+  | zero   => n
+  | succ m => succ (add' n m)
+
+def fib : Nat → Nat
+  | 0     => 1
+  | 1     => 1
+  | n + 2 => fib (n + 1) + fib n
+
+example : fib 0 = 1 := rfl
+example : fib 1 = 1 := rfl
+example (n : Nat) : fib (n + 2) = fib (n + 1) + fib n := rfl
+
+example : fib 7 = 21 := rfl
+
+-- #eval fib 50 -- slow
+
+def fibFast (n : Nat) : Nat :=
+  (loop n).2
+where
+  loop : Nat → Nat × Nat
+    | 0   => (0, 1)
+    | n+1 => let p := loop n; (p.2, p.1 + p.2)
+
+#eval fibFast 100 -- 573147844013817084101
+
+def fibFast' (n : Nat) : Nat :=
+  let rec loop : Nat → Nat × Nat
+    | 0   => (0, 1)
+    | n+1 => let ⟨fst, snd⟩ := loop n; (snd, fst + snd)
+  (loop n).2
+
+#print fibFast.loop
+/-
+def induction_and_recursion.fibFast.loop : Nat → Nat × Nat :=
+fun x =>
+  Nat.brecOn x fun x f =>
+    (match (motive := (x : Nat) → Nat.below x → Nat × Nat) x with
+      | 0 => fun x => (0, 1)
+      | succ n => fun x =>
+        let p := x.fst.fst;
+        (p.snd, p.fst + p.snd))
+      f
+-/
+
+variable (C : Nat → Type u)
+#check @Nat.below C -- : Nat → Type u
+#reduce @Nat.below C 3
+-- PProd (PProd (C 2) (PProd (PProd (C 1) (PProd (PProd (C 0) PUnit) PUnit)) PUnit)) PUnit
+-- `C 0`, `C 1`, `C 2` の項を格納するデータ構造
+
+#check @Nat.brecOn C -- : (t : Nat) → ((t : Nat) → Nat.below t → C t) → C t
+-- `n : Nat`に対する証明（`C n`の項）を、（nと）n未満に対する項（証明）`C 0`,`C 1`,...を使って構成する
+
+#reduce fib 50  -- fast
+#print fib
+/-
+-- brecOnを使って実装されている：
+def induction_and_recursion.fib : Nat → Nat :=
+fun x =>
+  Nat.brecOn x fun x f =>
+    (match (motive := (x : Nat) → Nat.below x → Nat) x with
+      | 0 => fun x => 1
+      | 1 => fun x => 1
+      | succ (succ n) => fun x => x.fst.fst + x.fst.snd.fst.fst)
+      f
+-/
+
+def append : List α → List α → List α
+  | [],      bs => bs
+  | a :: as, bs => a :: append as bs
+
+example : append [1,2,3] [4,5] = [1,2,3,4,5] := rfl
+
+/--
+もう一つ例を挙げる:
+listAdd x y は2つのリストのどちらかの要素がなくなるまで、
+最初のリストの先頭の要素 a と2番目のリストの先頭の要素 b を削除して
+a + b をリスト z に追加する操作を繰り返し、最後に z を返す。
+-/
+def listAdd [Add α] : List α → List α → List α -- `[Add α]`：「`α`は足し算`+`ができる型だよ」
+  | [],      _       => []
+  | _,       []      => []
+  | a :: as, b :: bs => (a + b) :: listAdd as bs
+
+#eval listAdd [1, 2, 3] [4, 5, 6, 6, 9, 10] -- [5, 7, 9]
+
+-- `let rec`でローカルに再帰的定義
+
+/--
+`a`を`n`個並べたリストを返す
+-/
+def replicate (n : Nat) (a : α) : List α := -- 関数のパラメータに追加して定義を「閉じる」
+  let rec loop : Nat → List α → List α
+    | 0,   as => as
+    | n+1, as => loop n (a :: as) -- `let rec`内のローカル変数`a`は↑
+  loop n []
+#check @replicate.loop -- : {α : Type u_1} → α → Nat → List α → List α
+#eval replicate 3 42 -- [42, 42, 42]
+
+-- タクティクモード内でも`let rec`は使える
+theorem length_replicate (n : Nat) (a : α) : (replicate n a).length = n := by
+  let rec aux (n : Nat) (as : List α)
+              : (replicate.loop a n as).length = n + as.length :=
+    match n with
+    | 0 =>
+        calc (replicate.loop a 0 as).length
+          _ = as.length     := rfl
+          _ = 0 + as.length := (Nat.zero_add _).symm
+    | n+1 =>
+        calc (replicate.loop a (n + 1) as).length
+          _ = (replicate.loop a n (a :: as)).length := rfl
+          _ = n + (a :: as).length                  := aux n (a :: as) -- 再帰的に適用
+          _ = n + succ as.length                    := congrArg _ (List.length_cons a as)
+          _ = n + (as.length + 1)                   := congrArg _ (Nat.succ_eq_add_one _)
+          _ = n + (1 + as.length)                   := congrArg _ (Nat.add_comm ..)
+          _ = n + 1 + as.length                     := (Nat.add_assoc ..).symm
+  exact aux n []
+-- 帰納法的に、帰納のステップでauxが使える、というのがrecOnと違って分かりづらい？
+
+-- 整礎再帰 well-founded recursion
+
+variable (α : Sort u)
+variable (r : α → α → Prop) -- α上の二項関係
+variable (x : α)
+
+#check @Acc -- : {α : Sort u_1} → (α → α → Prop) → α → Prop
+#check Acc r -- : α → Prop
+#print Acc.intro
+/-
+constructor Acc.intro.{u}: ∀ {α : Sort u} {r : α → α → Prop} (x : α),
+  (∀ (y : α), r y x → Acc r y) → Acc r x
+-/
+
+/-
+`Acc r x` ≡ `∀y, r y x → Acc r y`
+`Acc r x`：「関係`r`の下で（どの`y : α`からも）`x`がアクセス可能」
+
+`r y x`をある種の順序関係`y ≺ x`（間の記号は`\prec`）を表すと考えれば、
+`Acc r x`は`x`のすべての前者`y : α`からもアクセス可能と同値
+
+`x`が前者を持たなければ（前提が偽なので）`x`はアクセス可能
+
+型`α`の、任意のアクセス可能な項`x : α`に対して、先に`x`のすべての前者に割り当てれば、
+`x`にも値を割り当てられるはず。
+
+vscode-lean4での特殊記号の入力方法：
+https://github.com/leanprover/vscode-lean4/blob/master/vscode-lean4/src/abbreviation/abbreviations.json
+-/
+
+#check @WellFounded -- : {α : Sort u_1} → (α → α → Prop) → Prop
+#check WellFounded r -- : Prop
+-- `WellFounded r`：「二項関係`r`が整礎である」
+#check WellFounded.fix
+/-
+WellFounded.fix.{u, v} {α : Sort u} {C : α → Sort v} {r : α → α → Prop}
+  (hwf : WellFounded r)
+  (F : (x : α) → ((y : α) → r y x → C y) → C x)
+  (x : α) : C x
+-/
+
+noncomputable def f {α : Sort u}
+      (r : α → α → Prop)  -- α上の二項関係r
+      (h : WellFounded r) -- 「rは整礎である」証明
+      (C : α → Sort v)    -- motive
+      (F : (x : α) → ((y : α) → r y x → C y) → C x)
+                          -- `x`の各前者`y`について`C y`型の項が与えられたとき、`C x`の項を構築する方法
+      : (x : α) → C x := WellFounded.fix h F
+
+-- 自然数の除法
+open Nat
+
+#check Nat.sub_lt
+-- Nat.sub_lt {n m : Nat} (a✝ : 0 < n) (a✝¹ : 0 < m) : n - m < n
+
+theorem div_lemma {x y : Nat} : 0 < y ∧ y ≤ x → x - y < x :=
+  fun (⟨h1, h2⟩ : 0 < y ∧ y ≤ x) => show x - y < x from
+    Nat.sub_lt
+      (show 0 < x from
+        calc
+          0 < y := h1
+          _ ≤ x := h2
+      )
+      (show 0 < y from h1)
+
+/--
+`div.F x f`：`x`に対する「`y`で割る」関数
+`f`は、すべての`t < x`（`x`の前者）に対して「`y`で割る」関数、であるべき
+-/
+def div.F (x : Nat) (f : (w : Nat) → w < x → Nat → Nat) (y : Nat) : Nat :=
+  if h : 0 < y ∧ y ≤ x then -- `y`は`x`以下であるべき。また`y = 0`も困る。
+    (f (x - y) (show x - y < x from div_lemma h) y) + 1
+  else -- `y`で割れない
+    zero
+
+noncomputable def div :=
+  WellFounded.fix (measure id).wf div.F
+
+#check @measure                -- : {α : Sort u_1} → (α → Nat) → WellFoundedRelation α
+#check @WellFoundedRelation.wf -- : ∀ {α : Sort u_1} [self : WellFoundedRelation α], WellFounded WellFoundedRelation.rel
+
+#reduce div 8 2 -- 4
+
+/-
+#eval div 8 2
+-- failed to compile definition, consider marking it as 'noncomputable' because it depends on 'induction_and_recursion.div', and it does not have executable code
+-/
+
+def div' (x y : Nat) : Nat :=
+  if h : 0 < y ∧ y ≤ x then
+    have : x - y < x := div_lemma h -- 再帰後の項が元より「小さい」というためのヒント
+    (div' (x - y) y) + 1
+  else
+    zero
+
+example (x y : Nat) (h : 0 < y ∧ y ≤ x)
+        : div' x y = div' (x - y) y + 1 := by
+  conv => lhs; unfold div' -- 左辺の`div'`を展開
+  /-
+  (if h : 0 < y ∧ y ≤ x then
+    let_fun this := (_ : x - y < x);
+    div' (x - y) y + 1
+  else zero) =
+  div' (x - y) y + 1
+  -/
+  simp [h] -- `h : 0 < y ∧ y ≤ x`を使えば`then`の方が出てくる
+
+-- `natToBin`はChapter8.leanの方で。
+
+def ack : Nat → Nat → Nat
+  | 0,   y   => y+1
+  | x+1, 0   => ack x 1
+  | x+1, y+1 => ack x (ack (x+1) y)
+termination_by ack x y => (x, y) -- 別になくても動く（Leanが導出するらしい）
+
+#eval ack 3 5
+
+#print Fin
+
+def takeWhile {α : Type u} (p : α → Bool) (as : Array α) : Array α :=
+  go 0 #[]
+where
+  go (i : Nat) (r : Array α) : Array α :=
+    if h : i < as.size then
+      let a := as.get (Fin.mk i h)
+      if p a then
+        go (i+1) (r.push a)
+      else
+        r
+    else
+      r
+termination_by go i r => as.size - i -- これはないとエラーになる。
+-- 整礎関係`≺`を明示
+-- `(i, r) ≺ (j, r) ↔ as.size - i < as.size - j`
+-- `i`が増えていけば`as.size - i`は減っていく。
+-- `(i+1, _) ≺ (i, _)`
+
+#eval takeWhile (fun n : Nat => if n % 2 = 1 then true else false) #[1,3,5,6,7]
+-- #[1, 3, 5]
+#eval takeWhile (fun n : Nat => if n % 2 = 1 then true else false) #[2,3,5,6,7]
+-- #[]
+
+def div'' (x y : Nat) : Nat :=
+  if h : 0 < y ∧ y ≤ x then
+    div'' (x - y) y + 1
+  else
+    0
+decreasing_by -- この証明はタクティクで与える（`by`なので）
+/-
+⊢ (invImage (fun a => PSigma.casesOn a fun x snd => sizeOf x) instWellFoundedRelation).1 { fst := x - y, snd := y }
+  { fst := x, snd := y }
+-/
+  simp
+/-
+⊢ InvImage WellFoundedRelation.rel (fun a => a.fst) { fst := x - y, snd := y } { fst := x, snd := y }
+-/
+  apply div_lemma
+/-
+⊢ 0 < y ∧ y ≤ x
+-/
+  exact h
+
+#print InvImage
+/-
+def InvImage.{u, v} : {α : Sort u} → {β : Sort v} → (β → β → Prop) → (α → β) → α → α → Prop :=
+  fun {α} {β} r f a₁ a₂ => r (f a₁) (f a₂)
+-/
+#print WellFoundedRelation.rel
+/-
+def WellFoundedRelation.rel.{u} : {α : Sort u} → [self : WellFoundedRelation α] → α → α → Prop :=
+  fun α [self : WellFoundedRelation α] => self.1
+-/
+
+/-
+  InvImage WellFoundedRelation.rel (fun a => a.fst) { fst := x - y, snd := y } { fst := x, snd := y }
+= InvImage (r := rel) (f := (fun a => a.fst)) (a₁ := { fst := x - y, snd := y }) (a₂ := { fst := x, snd := y })
+= rel (a₁.fst) (a₂.fst)
+= rel (x - y) x
+= x - y < x  -- `Nat`上の整礎関係は`<`
+-/
+
+def ack' : Nat → Nat → Nat
+  | 0,   y   => y+1
+  | x+1, 0   => ack' x 1
+  | x+1, y+1 => ack' x (ack' (x+1) y)
+termination_by ack' x y => (x, y)
+decreasing_by
+  simp_wf
+  first | apply Prod.Lex.right; simp_arith
+          -- これで (x+1, y) ≺ (x+1, y+1) -- 3番目のケースの第2引数
+        | apply Prod.Lex.left; simp_arith
+          -- これで (x,   1) ≺ (x+1, 0)   -- 2番目のケース
+          -- と     (x, ...) ≺ (x+1, y+1) -- 3番目のケースの外側
+  -- タクティク全然わからん
+
+def unsound (x : Nat) : False :=
+  unsound (x + 1)
+decreasing_by sorry -- 引数の項が小さくなっていくことを公理に追加してしまう！
+
+#check unsound 0 -- : False -- `False`の証明が`unsound 0`
+#print axioms unsound
+-- 'induction_and_recursion.unsound' depends on axioms: [sorryAx]
+
+-- 相互再帰的定義
+mutual
+  def even : Nat → Bool
+    | zero   => true
+    | succ n => odd n
+
+  def odd : Nat → Bool
+    | zero   => false
+    | succ n => even n
+end
+
+example : even 0 = true := rfl
+example : even 1 = false := rfl
+example : even 1 = odd 0 := rfl
+example : odd 0 = false := rfl
+example : odd 1 = true := rfl
+example : odd 1 = even 0 := rfl
+
+example (n : Nat) : even (succ n) = odd n := rfl
+example (n : Nat) : odd (succ n) = even n := rfl
+
+example : ∀ n : Nat, even n = not (odd n) := by
+  intro n; induction n
+  . simp [even, odd]
+  . simp [even, odd, *]
+
+example : ∀ n : Nat, even n = not (odd n) :=
+  fun n =>
+    Nat.recOn n
+      (show even zero = not (odd zero) from rfl)
+      (fun n (ih : even n = not (odd n)) => show even (succ n) = not (odd (succ n)) from
+        have :=
+          calc not (odd (succ n))
+            _ = not (even n)      := rfl
+            _ = not (not (odd n)) := congrArg _ ih
+            _ = odd n             := Bool.not_not _
+            _ = even (succ n)     := rfl
+        this.symm
+      )
+
+open inductive_types
+open Even Odd
+
+theorem not_odd_zero : ¬ Odd zero :=
+  fun h : Odd zero => nomatch h -- `Odd zero`を作り出すコンストラクタはない(nomatch)
+
+-- theorem even_of_odd_succ : ∀ n : Nat, Odd (succ n) → Even n
+--   | _, odd_succ n h => h
+-- -- ↑ `∀ n : Nat` もパターンマッチングに参加するが、
+-- -- `odd_succ`のコンストラクタで`n`が得られるので使わない
+-- ↓こうすれば良い
+theorem even_of_odd_succ (n : Nat) : Odd (succ n) → Even n
+  | odd_succ n (h : Even n) => h
+#check odd_succ
+-- inductive_types.Odd.odd_succ (n : Nat) (a✝ : Even n) : Odd (n + 1)
+
+theorem odd_of_even_succ (n : Nat) : Even (succ n) → Odd n
+  | even_succ n (h : Odd n) => h
+#check even_succ
+-- inductive_types.Even.even_succ (n : Nat) (a✝ : Odd n) : Even (n + 1)
+
+inductive Term where
+  | const : String → Term             -- s : Stringに対して`const s`はTerm（sという名前を持つ定数）
+  | app   : String → List Term → Term -- s : Stringとts : List Termに対して`app s ts`はTerm（定数のリストに定数を適用した結果）
+
+namespace Term
+
+-- Termの各項の中に出てくる定数(const)の数を数える関数numConstsを定義
+mutual
+  def numConsts : Term → Nat
+    | const _  => 1
+    | app _ cs => numConstsLst cs
+
+  -- Listの各項に出てくる定数を数える関数
+  def numConstsLst : List Term → Nat
+    | []      => 0
+    | c :: cs => numConsts c + numConstsLst cs
+end
+
+def sampleTerm : Term := app "f" [app "g" [const "x"], const "y"]
+def sampleLstTerm : List Term := [app "g" [const "x", const "y"], const "y"]
+
+#eval numConsts sampleTerm -- 2（"x","y"）
+#eval numConstsLst sampleLstTerm -- 3（"x","y","y"）
+
+section
+set_option trace.Meta.Tactic.simp true
+example (s : String) : numConsts (const s) = 1 := by simp [numConsts]
+/-
+[Meta.Tactic.simp.rewrite] induction_and_recursion.Term.numConsts._eq_1:1000, induction_and_recursion.Term.numConsts
+      (induction_and_recursion.Term.const s) ==> 1
+[Meta.Tactic.simp.rewrite] @eq_self:1000, 1 = 1 ==> True
+-/
+-- 変数になるとrflで証明できないのか...
+-- simpタクティクは`_eq_1`なるものを使っているが、外からは見えないので使えない。
+end
+
+example (s : String) : numConsts (const s) = 1 := by unfold numConsts; rfl
+
+-- 項`e`内の定数`a`を`b`に置き換える関数replaceConstを定義
+mutual
+  def replaceConst (a b : String) : Term → Term
+    | const c  => if c == a then const b else const c
+    | app f cs => app f (replaceConstLst a b cs)
+
+  -- Listの各項内の定数`a`を`b`に置き換える関数
+  def replaceConstLst (a b : String) : List Term → List Term
+    | []      => []
+    | c :: cs => replaceConst a b c :: (replaceConstLst a b cs)
+end
+
+section
+set_option trace.Meta.Tactic.simp.rewrite true
+example : replaceConst a b (const c) = if c == a then const b else const c := by
+  simp [replaceConst]
+/-
+[Meta.Tactic.simp.rewrite] induction_and_recursion.Term.replaceConst._eq_1:1000, induction_and_recursion.Term.replaceConst a b
+      (induction_and_recursion.Term.const
+        c) ==> if (c == a) = true then induction_and_recursion.Term.const b else induction_and_recursion.Term.const c
+[Meta.Tactic.simp.rewrite] @beq_iff_eq:1000, (c == a) = true ==> c = a
+[Meta.Tactic.simp.rewrite] @eq_self:1000, (if c = a then induction_and_recursion.Term.const b else induction_and_recursion.Term.const c) =
+      if c = a then induction_and_recursion.Term.const b else induction_and_recursion.Term.const c ==> True
+-/
+end
+
+example : replaceConst a b (const c) = if c == a then const b else const c := by unfold replaceConst; rfl
+
+-- replaceConstしてもnumConstsの結果は変わらないことを示す
+mutual
+  theorem numConsts_replaceConst (a b : String) (e : Term)
+            : numConsts (replaceConst a b e) = numConsts e :=
+    match e with
+      | const c => show numConsts (replaceConst a b (const c)) = numConsts (const c) from
+          calc numConsts (replaceConst a b (const c))
+            _ = numConsts (if c == a then const b else const c) := by simp [replaceConst]
+            _ = numConsts (const c)
+                := Decidable.byCases
+                    (fun h : c == a =>
+                        calc numConsts (if c == a then const b else const c)
+                          _ = numConsts (const b) := congrArg _ (if_pos h)
+                       -- _ = 1                   := by simp [numConsts]
+                          _ = numConsts (const c) := by simp [numConsts]
+                    )
+                    (fun h : ¬ c == a => congrArg _ (if_neg h))
+      | app f cs => show numConsts (replaceConst a b (app f cs)) = numConsts (app f cs) from
+          calc numConsts (replaceConst a b (app f cs))
+            _ = numConsts (app f (replaceConstLst a b cs)) := by simp [replaceConst]
+            _ = numConstsLst (replaceConstLst a b cs)      := by simp [numConsts]
+            _ = numConstsLst cs                            := numConstsLst_replaceConstLst ..
+            _ = numConsts (app f cs)                       := by simp [numConsts]
+
+  theorem numConstsLst_replaceConstLst (a b : String) (es : List Term)
+            : numConstsLst (replaceConstLst a b es) = numConstsLst es :=
+    match es with
+      | []      => rfl
+      | c :: cs => -- by simp [replaceConstLst, numConstsLst, numConsts_replaceConst a b c, numConstsLst_replaceConstLst a b cs]
+          calc numConstsLst (replaceConstLst a b (c :: cs))
+            _ = numConstsLst (replaceConst a b c :: replaceConstLst a b cs)            := by simp [replaceConstLst]
+            _ = numConsts (replaceConst a b c) + numConstsLst (replaceConstLst a b cs) := by simp [numConstsLst]
+            _ = numConsts c + numConstsLst (replaceConstLst a b cs)                    := congrArg (· + _) (numConsts_replaceConst a b c)
+            _ = numConsts c + numConstsLst cs                                          := congrArg _ (numConstsLst_replaceConstLst a b cs)
+            _ = numConstsLst (c :: cs)                                                 := by simp [numConstsLst]
+end
+
+end Term
+
+-- 依存パターンマッチング
+
+inductive Vector (α : Type u) : Nat → Type u
+  | nil  : Vector α zero
+  | cons : α → {n : Nat} → Vector α n → Vector α (succ n)
+  deriving Repr
+
+namespace Vector
+
+-- Vector.tailを定義したい
+
+/-
+-- casesOnで頑張る
+#check @Vector.casesOn
+/-
+@Vector.casesOn :
+  {α : Type u_2} →
+  {motive : (a : Nat) → Vector α a → Sort u_1} →
+  {a : Nat} →
+  (t : Vector α a) →
+  motive zero nil →
+  ((a : α) → {n : Nat} → (a_1 : Vector α n) → motive (succ n) (cons a a_1)) → motive a t
+-/
+
+-- `casesOn`は`nil`に対しても値を返す必要がある。`Vector.tail Vector.nil`とは？
+
+-- `succ n`であることを仮定した補助関数を使う
+/-- `Vector α m`の項に対して、`m = succ n`のとき`Vector α n`の項(tail)を返す -/
+def tailAux {α : Type u} {n m : Nat} (v : Vector α m) : m = succ n → Vector α n :=
+  Vector.casesOn v
+    (motive := fun {m : Nat} (_ : Vector α m) => m = succ n → Vector α n)
+    -- nil
+    (fun (h : zero = succ n) => Nat.noConfusion h)
+    -- cons
+    (fun (_a : α) (m : Nat) (w : Vector α m) =>
+      -- motive (succ m) (cons _a w)
+      fun (h : succ m = succ n) => show Vector α n from
+        Nat.noConfusion h (fun (h1 : m = n) => h1 ▸ w)
+        -- wは`Vector α m`なので`m = n`を使って`Vector α n`にする
+        -- 最後の項がなんの引数なのかわからない...
+    )
+
+#check Nat.noConfusion
+-- Nat.noConfusion.{u} {P : Sort u} {v1 v2 : Nat} (h12 : v1 = v2) : Nat.noConfusionType P v1 v2
+#print Nat.noConfusion
+#check Nat.noConfusionType
+-- Nat.noConfusionType.{u} (P : Sort u) (v1 v2 : Nat) : Sort u
+
+variable (α : Type u) (n m : Nat) (v : Vector α m) (h : succ m = succ n)
+#check Nat.noConfusion (P := Vector α n) h
+-- Nat.noConfusion h : Nat.noConfusionType (Vector α n) (succ m) (succ n)
+#check Nat.noConfusionType (Vector α n) (succ m) (succ n)
+-- Nat.noConfusionType (Vector α n) (succ m) (succ n) : Type u
+#check Nat.noConfusion (P := Vector α n) h (fun h1 : m = n => h1 ▸ v)
+-- Nat.noConfusion h fun h1 => h1 ▸ v : Vector α n
+
+def tail {α : Type u} {n : Nat} (v : Vector α (succ n)) : Vector α n :=
+  tailAux v rfl
+
+#print tail
+/-
+def induction_and_recursion.Vector.tail.{u} : {α : Type u} → {n : Nat} → Vector α (succ n) → Vector α n :=
+fun {α} {n} v => tailAux v (_ : succ n = succ n)
+-/
+#print tailAux
+/-
+def induction_and_recursion.Vector.tailAux.{u} : {α : Type u} → {n m : Nat} → Vector α m → m = succ n → Vector α n :=
+fun {α} {n m} v =>
+  Vector.casesOn (motive := fun {m} x => m = succ n → Vector α n) v (fun h => Nat.noConfusion h) fun _a m w h =>
+    let_fun this := Nat.noConfusion h fun h1 => h1 ▸ w;
+    this
+-/
+
+-- #eval tail nil -- error!
+#eval tail (cons 0 nil)
+-- induction_and_recursion.Vector.nil
+#eval tail (cons 0 (cons 1 nil))
+-- induction_and_recursion.Vector.cons 1 (induction_and_recursion.Vector.nil)
+-/
+
+-- 再帰を使って等式コンパイラにやらせる
+def tail {α : Type u} {n : Nat} : Vector α (succ n) → Vector α n
+  | cons _ as => as
+#print tail
+/-
+def induction_and_recursion.Vector.tail.{u} : {α : Type u} → {n : Nat} → Vector α (succ n) → Vector α n :=
+fun {α} {n} x =>
+  match x with
+  | cons a as => as
+-/
+
+def head {α : Type u} {n : Nat} : Vector α (succ n) → α
+  | cons a _  => a
+
+theorem eta {α : Type u} : ∀ {n : Nat} (v : Vector α (succ n)), cons (head v) (tail v) = v
+  | _n, cons _a _as => rfl
+
+def map {α : Type u₁} {β : Type u₂} {γ : Type u₃}
+        (f : α → β → γ) : {n : Nat} → Vector α n → Vector β n → Vector γ n
+  | zero,   nil,       nil       => nil
+  | succ _, cons a as, cons b bs => cons (f a b) (map f as bs)
+
+#print map
+/-
+def induction_and_recursion.Vector.map.{u₁, u₂, u₃} : {α : Type u₁} →
+  {β : Type u₂} → {γ : Type u₃} → (α → β → γ) → {n : Nat} → Vector α n → Vector β n → Vector γ n :=
+fun {α} {β} {γ} f x x_1 x_2 =>
+  Vector.brecOn (motive := fun x x_3 => Vector β x → Vector γ x) x_1
+    (fun x x_3 f_1 x_4 =>
+      (match (motive :=
+          (x : Nat) →
+            (x_5 : Vector α x) →
+              Vector β x → Vector.below (motive := fun x x_7 => Vector β x → Vector γ x) x_5 → Vector γ x)
+          x, x_3, x_4 with
+        | zero, nil, nil => fun x => nil
+        | succ n, cons a as, cons b bs => fun x => cons (f a b) (PProd.fst x.fst bs))
+        f_1)
+    x_2
+-/
+#print map.match_1
+/-
+def induction_and_recursion.Vector.map.match_1.{u_1, u_2, u_3} : {α : Type u_1} →
+  {β : Type u_2} →
+    (motive : (x : Nat) → Vector α x → Vector β x → Sort u_3) →
+      (x : Nat) →
+        (x_1 : Vector α x) →
+          (x_2 : Vector β x) →
+            (Unit → motive zero nil nil) →
+              ((n : Nat) →
+                  (a : α) → (as : Vector α n) → (b : β) → (bs : Vector β n) → motive (succ n) (cons a as) (cons b bs)) →
+                motive x x_1 x_2 :=
+fun {α} {β} motive x x_1 x_2 h_1 h_2 =>
+  Nat.casesOn (motive := fun x => (x_3 : Vector α x) → (x_4 : Vector β x) → motive x x_3 x_4) x
+    (fun x x_3 =>
+      Vector.casesOn (motive := fun a x_4 => zero = a → HEq x x_4 → motive zero x x_3) x
+        (fun h h =>
+          (_ : nil = x) ▸
+            Vector.casesOn (motive := fun a x => zero = a → HEq x_3 x → motive zero nil x_3) x_3
+              (fun h h => (_ : nil = x_3) ▸ h_1 ()) (fun a {n} a_1 h => Nat.noConfusion h) (_ : zero = zero)
+              (_ : HEq x_3 x_3))
+        (fun a {n} a_1 h => Nat.noConfusion h) (_ : zero = zero) (_ : HEq x x))
+    (fun n x x_3 =>
+      Vector.casesOn (motive := fun a x_4 => succ n = a → HEq x x_4 → motive (succ n) x x_3) x
+        (fun h => Nat.noConfusion h)
+        (fun a {n_1} a_1 h =>
+          Nat.noConfusion h fun n_eq =>
+            Eq.ndrec (motive := fun {n_2} => (a_2 : Vector α n_2) → HEq x (cons a a_2) → motive (succ n) x x_3)
+              (fun a_2 h =>
+                (_ : cons a a_2 = x) ▸
+                  Vector.casesOn (motive := fun a_3 x => succ n = a_3 → HEq x_3 x → motive (succ n) (cons a a_2) x_3)
+                    x_3 (fun h => Nat.noConfusion h)
+                    (fun a_3 {n_2} a_4 h =>
+                      Nat.noConfusion h fun n_eq =>
+                        Eq.ndrec (motive := fun {n_3} =>
+                          (a_5 : Vector β n_3) → HEq x_3 (cons a_3 a_5) → motive (succ n) (cons a a_2) x_3)
+                          (fun a_5 h => (_ : cons a_3 a_5 = x_3) ▸ h_2 n a a_2 a_3 a_5) n_eq a_4)
+                    (_ : succ n = succ n) (_ : HEq x_3 x_3))
+              n_eq a_1)
+        (_ : succ n = succ n) (_ : HEq x x))
+    x_1 x_2
+-/
+
+def zip {α : Type u₁} {β : Type u₂}
+        : {n : Nat} → Vector α n → Vector β n → Vector (α × β) n
+  | zero  , nil,       nil       => nil
+  | succ _, cons a as, cons b bs => cons (a, b) (zip as bs)
+
+-- アクセス不能パターン
+
+-- `ImageOf f b`：「`b`が`f`の像に含まれる」
+inductive ImageOf {α β : Type u} (f : α → β) : β → Type u
+  | imf : (a : α) → ImageOf f (f a)
+open ImageOf
+
+-- `f : α → β`の像`b : α`を受け取って、`imf a`の証拠に基づいて`f`で`b`に移される要素（の一つ）`a : α`を返す逆関数
+
+/-
+def inverse {α β : Type u} {f : α → β} : (b : β) → ImageOf f b → α
+  | b, imf a => a
+       ^^^^^
+type mismatch
+  imf a
+has type
+  ImageOf f (f a) : Type u
+but is expected to have type
+  ImageOf f b : Type u
+-/
+/-
+def inverse {α β : Type u} {f : α → β} : (b : β) → ImageOf f b → α
+  | f a, imf a => a
+    ^^^
+invalid pattern
+-/
+def inverse {α β : Type u} {f : α → β} : (b : β) → ImageOf f b → α
+  | .(f a), imf a => a
+
+-- VectorのcasesOnエリミネーターが第2引数でケース判別するときに`n`の値を自動的に`zero`か`succ n`に置き換える
+-- アクセス不能パターンを使うと等式コンパイラに`n`でケース判別しないようにさせられる
+def add {α : Type u} [Add α] : {n : Nat} → Vector α n → Vector α n → Vector α n
+  | .(zero),   nil,       nil       => nil
+  | .(succ _), cons a as, cons b bs => cons (a + b) (add as bs)
+
+-- discriminant refinement（判別子の絞り込み）を使うと：
+def add' {α : Type u} [Add α] {n : Nat} : Vector α n → Vector α n → Vector α n
+  | nil,       nil       => nil
+  | cons a as, cons b bs => cons (a + b) (add as bs)
+
+def map' {α : Type u₁} {β : Type u₂} {γ : Type u₃}
+        (f : α → β → γ) : {n : Nat} → Vector α n → Vector β n → Vector γ n
+  | .(zero),   nil,       nil       => nil
+  | .(succ _), cons a as, cons b bs => cons (f a b) (map f as bs)
+#print map'
+/-
+def induction_and_recursion.Vector.map'.{u₁, u₂, u₃} : {α : Type u₁} →
+  {β : Type u₂} → {γ : Type u₃} → (α → β → γ) → {n : Nat} → Vector α n → Vector β n → Vector γ n :=
+fun {α} {β} {γ} f x x_1 x_2 =>
+  match x, x_1, x_2 with
+  | .(zero), nil, nil => nil
+  | .(succ n), cons a as, cons b bs => cons (f a b) (map f as bs)
+-/
+
+def map'' {α : Type u₁} {β : Type u₂} {γ : Type u₃}
+        (f : α → β → γ) {n : Nat} : Vector α n → Vector β n → Vector γ n
+  | nil,       nil       => nil
+  | cons a as, cons b bs => cons (f a b) (map f as bs)
+#print map''
+/-
+def induction_and_recursion.Vector.map''.{u₁, u₂, u₃} : {α : Type u₁} →
+  {β : Type u₂} → {γ : Type u₃} → (α → β → γ) → {n : Nat} → Vector α n → Vector β n → Vector γ n :=
+fun {α} {β} {γ} f {n} x x_1 =>
+  match n, x, x_1 with
+  | .(zero), nil, nil => nil
+  | .(succ n), cons a as, cons b bs => cons (f a b) (map f as bs)
+-/
