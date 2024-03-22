@@ -2246,3 +2246,120 @@ fun {α} {β} {γ} f {n} x x_1 =>
   | .(zero), nil, nil => nil
   | .(succ n), cons a as, cons b bs => cons (f a b) (map f as bs)
 -/
+end Vector
+end induction_and_recursion
+
+namespace structures_and_records
+
+-- 構造体
+
+structure Point (α : Type u) where
+  x : α
+  y : α
+  deriving Repr
+
+#check Point      -- a type
+#check @Point.rec -- the eliminator
+#check @Point.mk  -- the constructor
+#check @Point.x   -- a projection (accessor)
+#check @Point.y   -- a projection
+
+def p := Point.mk 10 20
+example : p.x = 10 := rfl
+example : p.y = 20 := rfl
+
+example {α : Type u} (p : Point α) : p.x = Point.x p := rfl
+
+namespace Point
+
+def add (p q : Point Nat) :=
+  Point.mk (p.x + q.x) (p.y + q.y)
+
+def q := Point.mk 3 4
+
+example : Point.add p q = Point.mk 13 24 := rfl
+
+example (p q : Point Nat) : p.add q = Point.add p q := rfl
+
+def smul (n : Nat) (p : Point Nat) :=
+  Point.mk (n * p.x) (n * p.y)
+
+example : p.smul 2 = Point.mk 20 40 := rfl
+
+def smul' (p : Point Nat) (n : Nat) := smul n p
+example : p.smul' 2 = p.smul 2 := rfl
+-- pは最初のPoint型の引数に当てられる
+
+-- フィールド名を指定して構築
+example := { x := 10, y := 20 : Point Nat }
+example := { y := 20, x := 10 : Point _ }
+example : Point Nat := { y := 20, x := 10 }
+
+-- フィールドの更新、withの後ろにないフィールドを前の項から取ってくる
+example : { p with y := 3 } = Point.mk 10  3 := rfl
+example : { p with x := 4 } = Point.mk  4 20 := rfl
+
+end Point
+
+structure Point3 (α : Type u) where
+  x : α
+  y : α
+  z : α
+
+def r : Point3 Nat := { x := 3, y := 4, z := 5 }
+
+example : let s : Point3 Nat := { p, r with x := 6 };
+          s.x = 6 ∧ s.y = 20 ∧ s.z = 5 := ⟨rfl, rfl, rfl⟩
+-- 前の方から取られる
+
+-- 継承（のシミュレート）
+
+inductive Color
+  | red
+  | blue
+  | green
+
+structure ColoredPoint (α : Type u) extends Point α where
+  c : Color
+
+#print ColoredPoint
+/-
+inductive structures_and_records.ColoredPoint.{u} : Type u → Type u
+number of parameters: 1
+constructors:
+structures_and_records.ColoredPoint.mk : {α : Type u} → Point α → Color → ColoredPoint α
+-/
+
+structure RGBValue where
+  red   : Nat
+  blue  : Nat
+  green : Nat
+
+structure RedGreenPoint3 (α : Type u) extends Point3 α, RGBValue where
+  no_blue : blue = 0
+
+#check RedGreenPoint3.no_blue
+/-
+structures_and_records.RedGreenPoint3.no_blue.{u} {α : Type u}
+  (self : RedGreenPoint3 α)
+  : self.toRGBValue.blue = 0
+-/
+#print RedGreenPoint3.toRGBValue
+/-
+@[reducible] def structures_and_records.RedGreenPoint3.toRGBValue.{u}
+  : {α : Type u} → RedGreenPoint3 α → RGBValue
+  := fun α self => self.2
+-/
+
+def p3 : Point3 Nat := { x := 10, y := 20, z := 30 }
+
+def rgp3 : RedGreenPoint3 Nat :=
+  { p3 with red := 200, blue := 0, green := 40, no_blue := rfl }
+example : rgp3.x    =  10 := rfl
+example : rgp3.red  = 200 := rfl
+example : rgp3.blue = 0   := rfl
+
+example {α : Type u} : ∀ (p : RedGreenPoint3 α), p.blue = 0 :=
+  RedGreenPoint3.no_blue
+example {α : Type u} : ∀ (p : RedGreenPoint3 α), p.blue = 0 :=
+  fun p => p.no_blue
