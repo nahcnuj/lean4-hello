@@ -2363,3 +2363,458 @@ example {α : Type u} : ∀ (p : RedGreenPoint3 α), p.blue = 0 :=
   RedGreenPoint3.no_blue
 example {α : Type u} : ∀ (p : RedGreenPoint3 α), p.blue = 0 :=
   fun p => p.no_blue
+
+end structures_and_records
+
+namespace type_classes
+
+-- 加法の実装を保持する構造体
+structure Add' (a : Type) where
+  add : a → a → a
+
+#check @Add'.add
+-- @Add'.add : {a : Type} → Add a → a → a → a
+
+def double' (s : Add a) (x : a) : a :=
+  s.add x x
+
+-- いちいち加法の実装を与えなければならない
+example : double' { add := Nat.add } 10 = 20 := rfl
+example : double' { add := Nat.mul } 10 = 100 := rfl
+example : double' { add := Int.add } 10 = 20 := rfl
+-- 暗黙の引数にできたら...
+
+namespace Hidden
+-- structureをclassに変える：型クラス
+class Add (a : Type) where
+  add : a → a → a
+
+#check @Add.add
+-- @Add.add : {a : Type} → [self : Add a] → a → a → a
+-- `Add a`が`[]`で囲まれてインスタンス暗黙引数(instance implicit)になった
+
+-- 型クラスのインスタンスを登録するには
+instance : Add Nat where
+  add := Nat.add
+
+instance : Add Int where
+  add := Int.add
+
+instance : Add Float where
+  add := Float.add
+
+def double [Add a] (x : a) : a :=
+  Add.add x x
+
+#check @double
+-- @double : {a : Type} → [inst : Add a] → a → a
+
+example : double 10 = 20 := rfl
+example : double (10 : Int) = (20 : Int) := rfl
+#eval double (7 : Float) -- 14.000000
+#eval double (239.0 + 2) -- 482.000000
+#check 239.0 -- : Float
+#eval double (2 + 239.0) -- 482.000000
+end Hidden
+
+instance [Add a] : Add (Array a) where
+  add x y := Array.zipWith x y (· + ·)
+
+example : Add.add #[1,2] #[3,4] = #[4,6] := rfl
+example : #[1,2] + #[3,4] = #[4,6] := rfl
+
+namespace Hidden
+
+-- 有項型を表す型クラス
+class Inhabited (a : Type u) where
+  default : a
+
+#check @Inhabited.default
+-- @Inhabited.default : {a : Type u_1} → [self : Inhabited a] → a
+
+instance : Inhabited Nat where
+  default := 0
+
+instance : Inhabited Bool where
+  default := false
+
+instance : Inhabited Unit where
+  default := ()
+
+instance : Inhabited Prop where
+  default := False
+
+example : (Inhabited.default : Nat)  = 0     := rfl
+example : (Inhabited.default : Bool) = false := rfl
+
+export Inhabited (default) -- 今の名前空間にInhabited.defaultをエクスポート
+example : (default : Nat) = 0 := rfl
+example : (default : Bool) = false := rfl
+
+-- インスタンスの連鎖
+instance [Inhabited a] [Inhabited b] : Inhabited (a × b) where
+  default := ((default : a), (default : b))
+
+example : (default : Nat × Bool) = (0, false) := rfl
+
+-- bが有項ならa → bも有項
+instance {a : Type u} [Inhabited b] : Inhabited (a → b) where
+  default := fun (_ : a) => (default : b)
+
+#check @inferInstance
+-- @inferInstance : {α : Sort u_1} → [i : α] → α
+#check (inferInstance : Inhabited Nat)
+
+def foo : Inhabited (Nat × Nat) :=
+  inferInstance
+
+example : foo.default = (0, 0) := rfl
+
+example : foo.default = (default, default) := rfl
+
+#print inferInstance
+/-
+@[reducible] def inferInstance.{u} : {α : Sort u} → [i : α] → α :=
+fun {α} [i : α] => i
+-/
+end Hidden
+
+-- ToString
+structure Person where
+  name : String
+  age  : Nat
+
+instance : ToString Person where
+  toString p := p.name ++ "@" ++ toString p.age
+
+def me : Person := { name := "nahcnuj", age := 28 }
+
+#eval toString me -- "nahcnuj@28"
+
+#eval toString (me, "Hello") -- "(nahcnuj@28, Hello)"
+-- `ToString Prod`と`ToString Person`
+
+-- OfNat
+structure Rational where
+  num : Int
+  den : Nat
+  inv : den ≠ 0
+
+scoped instance instOfNatRational (n : Nat) : OfNat Rational n where
+  ofNat := { num := n, den := 1, inv := show 1 ≠ 0 from Nat.one_ne_zero }
+
+instance : ToString Rational where
+  toString r := s!"{r.num}/{r.den}"
+
+#eval (2 : Rational) -- 2/1
+
+#check (2 : Nat) -- : Nat
+#check @OfNat.ofNat Nat 2 (instOfNatNat 2) -- : Nat
+
+#check (2 : Rational) -- : Rational
+#check @OfNat.ofNat Rational 2 (instOfNatRational 2) -- : Rational
+
+#check nat_lit 2 -- : Nat
+-- #check (nat_lit 2 : Rational) -- Error!
+
+class Monoid (α : Type u) where
+  unit : α         -- 単位元
+  op   : α → α → α -- 二項演算
+
+-- モノイドの単位元を生の自然数`1`に割り当てる
+instance [s : Monoid α] : OfNat α (nat_lit 1) where
+  ofNat := s.unit
+
+example [Monoid α] : α := (1 : α)
+
+namespace Hidden
+
+-- 異種(heterogeneous)多相乗法
+class HMul (α : Type u) (β : Type v) (γ : outParam (Type w)) where
+  hMul : α → β → γ
+export HMul (hMul)
+
+-- 自然数上の同種乗法
+instance : HMul Nat Nat Nat where
+  hMul := Nat.mul
+
+-- 配列のスカラー倍
+instance : HMul Nat (Array Nat) (Array Nat) where
+  hMul a bs := bs.map (fun b => hMul a b)
+
+-- α と β が分かれば型クラスインスタンスを合成してくれる
+#eval hMul 3 4          -- 12
+#eval hMul 3 #[2, 3, 4] -- #[6, 9, 12]
+end Hidden
+
+namespace Hidden'
+class HMul (α : Type u) (β : Type v) (γ : outParam (Type w)) where
+  hMul : α → β → γ
+export HMul (hMul)
+
+-- 自然数上の同種乗法
+instance : HMul Nat Nat Nat where
+  hMul := Nat.mul
+
+instance [HMul α β γ] : HMul α (Array β) (Array γ) where
+  hMul a bs := bs.map (fun b => (hMul a b : γ))
+
+#eval hMul 4 3          -- 12
+
+#eval hMul 4 #[2, 3, 4] -- #[8, 12, 16]
+-- `HMul Nat Nat Nat`のインスタンスから
+-- `HMul Nat (Array Nat) (Array Nat)`のインスタンスが合成されている
+
+#eval hMul 2 #[ #[2, 3], #[0, 4] ] -- #[ #[4, 6], #[0, 8] ]
+-- `HMul Nat (Array Nat) (Array Nat)`のインスタンスから
+-- `HMul Nat (Array (Array Nat)) (Array (Array Nat))`のインスタンスが合成されている
+
+instance : HMul Int Int Int where
+  hMul := Int.mul
+
+def xs : List Int := [1, 2, 3]
+
+#check_failure fun y => xs.map (fun x => hMul x y)
+/-
+typeclass instance problem is stuck, it is often due to metavariables
+  HMul Int ?m.223816 (?m.223847 y)
+-- `y`の型が分からないと合成ができない
+-/
+
+-- 明示すれば良いが...
+#check fun (y : Int) => xs.map (fun x => hMul x y)
+-- fun y => List.map (fun x => hMul x y) xs : Int → List Int
+end Hidden'
+
+namespace Hidden
+
+@[default_instance]
+instance : HMul Int Int Int where
+  hMul := Int.mul
+
+def xs : List Int := [1, 2, 3]
+
+#check fun y => xs.map (fun x => hMul x y) -- : Int → List Int
+-- デフォルトインスタンスの`HMul Int Int Int`が使われる
+#eval (fun y => xs.map (fun x => hMul x y)) (-2) -- [-2, -4, -6]
+
+structure Rational where
+  num : Int
+  den : Nat
+  inv : den ≠ 0
+
+/-
+@[default_instance 100] /- low prio -/
+instance (n : Nat) : OfNat Nat n where
+  ofNat := n
+-/
+
+/-
+@[default_instance 200] -- `OfNat Nat n`の優先度は100（上記コメント参照）
+scoped instance instOfNatRational (n : Nat) : OfNat Rational n where
+  ofNat := { num := n, den := 1, inv := show 1 ≠ 0 from Nat.one_ne_zero }
+
+#check 2 -- : Rational
+-- Natよりも優先された
+-/
+
+-- 同種乗法
+class Mul (α : Type u) where
+  mul : α → α → α
+
+-- 優先度を下げておくことで、同種乗法はあるが異種乗法は定義されていないときに、
+-- 同種乗法が異種乗法として使われるようにする
+@[default_instance 10]
+instance [Mul α] : HMul α α α where
+  hMul := Mul.mul
+
+end Hidden
+
+/-
+local instance
+-- 現在のセクション、名前空間、ファイルの終わりまで有効なインスタンス
+
+scoped instance
+-- 同じ名前空間の中にいるか、その名前空間を開いている(open)とき有効なインスタンス
+
+open scoped
+-- scopedな定義だけopenする
+-/
+
+-- Decidable
+variable (p : Nat → Prop)
+
+section withClassical
+open Classical -- 任意の命題を決定可能とするには古典論理（排中律）が必要
+
+-- 場合分け(if-then-else)によって関数を定義するとnoncomputableになる
+noncomputable def foo : Nat → Bool :=
+  fun (n : Nat) =>
+  if p n then true
+  else false
+#print axioms foo
+-- 'type_classes.foo' depends on axioms: [Classical.choice, propext, Quot.sound]
+
+end withClassical
+
+-- 自然数上の決定可能述語を用いて場合分けするのは大丈夫
+def step (a b x : Nat) : Nat :=
+  if x < a ∧ x > b then 0 else 1
+
+set_option pp.explicit true
+#print step
+/-
+def type_classes.step : Nat → Nat → Nat → Nat :=
+fun a b x =>
+  @ite Nat (@LT.lt Nat instLTNat x a ∧ @GT.gt Nat instLTNat x b)
+    (@instDecidableAnd (@LT.lt Nat instLTNat x a) (@GT.gt Nat instLTNat x b) (Nat.decLt x a) (Nat.decLt b x)) 0 1
+-/
+
+#check @Nat.decLt
+-- Nat.decLt : (n m : Nat) → Decidable (@LT.lt Nat instLTNat n m)
+#check @instDecidableAnd
+-- @instDecidableAnd : {p q : Prop} → [dp : Decidable p] → [dq : Decidable q] → Decidable (p ∧ q)
+
+def Set (α : Type u) := α → Prop
+
+section
+set_option trace.Meta.synthInstance true
+/-
+example : Inhabited (Set α) :=
+  inferInstance
+/-
+[Meta.synthInstance] ❌ Inhabited (type_classes.Set α) ▼
+  [] new goal Inhabited (type_classes.Set α) ▶
+  [] ✅ apply @instInhabited to Inhabited (type_classes.Set α) ▼
+    [tryResolve] ✅ Inhabited (type_classes.Set α) ≟ Inhabited (type_classes.Set α)
+    [] no instances for Monad type_classes.Set ▼
+      [instances] #[]
+-/
+-/
+
+example : Inhabited (Set α) :=
+  inferInstanceAs (Inhabited (α → Prop))
+/-
+[Meta.synthInstance] ✅ Inhabited (α → Prop) ▼
+  [] new goal Inhabited (α → Prop) ▶
+  [] ❌ apply instInhabitedProp to Inhabited (α → Prop) ▶
+  [] ✅ apply @instInhabitedForAll_1 to Inhabited (α → Prop) ▼
+    [tryResolve] ✅ Inhabited (α → Prop) ≟ Inhabited (α → Prop)
+    [] new goal Inhabited Prop ▶
+  [] ✅ apply instInhabitedProp to Inhabited Prop ▼
+    [tryResolve] ✅ Inhabited Prop ≟ Inhabited Prop
+  [resume] propagating Inhabited Prop to subgoal Inhabited Prop of Inhabited (α → Prop) ▶
+  [resume] propagating α → Inhabited Prop to subgoal α → Inhabited Prop of Inhabited (α → Prop) ▶
+  [] result @instInhabitedForAll_1 α (fun a => Prop) fun a => instInhabitedProp
+-/
+end
+
+example : Inhabited (Set α) :=
+  @inferInstance (Inhabited (α → Prop)) _
+example : Inhabited (α → Prop) :=
+  inferInstance
+
+-- 型強制
+
+-- 1. ある型の族から他の型の族への強制 `Coe`
+-- 強制元の族に属する型の「項」を、強制先の族に属する対応する型の「項」として見る
+
+-- Bool型の項をProp型の項として見る
+instance : Coe Bool Prop where
+  coe b := b = true
+
+#eval if true then 5 else 3  -- 5
+-- if の後は Prop でなければならないが、Coe Bool PropによってBool型の項`true`がProp型の項`true = true`へ強制される
+#eval if false then 5 else 3 -- 3
+-- `false : Bool` → `false = true : Prop`
+
+-- List α から Set α への強制
+namespace Hidden
+def Set (α : Type u) := α → Prop
+def Set.empty {α : Type u} : Set α := fun _ => False
+def Set.singleton (a : α) : Set α := fun x => x = a
+def Set.union (a b : Set α) : Set α := fun x => a x ∨ b x
+notation "{ " a " }" => Set.singleton a
+infix:55 " ∪ " => Set.union
+def List.toSet : List α → Set α
+  | []      => Set.empty
+  | a :: as => {a} ∪ List.toSet as
+
+instance : Coe (List α) (Set α) where
+  coe := List.toSet
+
+#check {1} ∪ [2, 3] -- : Set Nat
+
+#check let x := [2, 3]; {1} ∪ x -- xは`List Nat`
+/-
+let x := @List.cons Nat 2 (@List.cons Nat 3 (@List.nil Nat));
+@Set.union Nat (@Set.singleton Nat 1) (@List.toSet Nat x) : Set Nat
+-/
+#check let x := ↑[2, 3]; {1} ∪ x -- xは`Set Nat`
+/-
+let x := @List.toSet Nat (@List.cons Nat 2 (@List.cons Nat 3 (@List.nil Nat)));
+@Set.union Nat (@Set.singleton Nat 1) x : Set Nat
+-/
+
+-- 依存強制
+instance (p : Prop) [Decidable p] : CoeDep Prop p Bool where
+  coe := decide p
+-- `p : Prop`が`Decidable`なら`Bool`型に強制できる
+end Hidden
+
+-- 2. ある型の族からSortのクラスへの強制 `CoeSort`
+
+structure Semigroup where
+  carrier : Type u                      -- 台集合
+  mul     : carrier → carrier → carrier -- 乗法
+  -- 乗法の結合則
+  mul_assoc (a b c : carrier) : mul (mul a b) c = mul a (mul b c)
+
+instance (S : Semigroup) : Mul S.carrier where
+  mul := S.mul
+
+variable (S : Semigroup) (a b : S.carrier)
+#check a * b -- : S.carrier
+
+#check Semigroup.carrier
+-- type_classes.Semigroup.carrier.{u} (self : Semigroup) : Type u
+-- Semigroup（半群）の項`S`を`Type u`の項（型）にマッピングする
+
+instance : CoeSort Semigroup (Type u) where
+  coe := Semigroup.carrier
+-- `a : S.carrier`を`a : S`と書けるようになる
+
+example (S : Semigroup) : ∀ (a b c : S), (a * b) * c = a * (b * c) :=
+  fun (a b c : S) => S.mul_assoc a b c
+
+-- 3. ある型の族から関数型のクラスへの強制 `CoeFun`
+-- 「関数型のクラス」＝依存関数型`(z : B) → C`の集まり
+
+-- 半群S₁,S₂の間の射(morphism)：S₁の台からS₂の台への、乗法を保存する関数
+structure Morphism (S₁ S₂ : Semigroup) where
+  mor : S₁ → S₂
+  resp_mul : ∀ (a b : S₁), mor (a * b) = (mor a) * (mor b)
+/-
+暗黙の強制：
+- `a b : S₁.carrier` → `a b : S₁`
+- `a * b : S₁.carrier` → `a * b : S₁` (morはS₁ → S₂)
+- `(mor a) * (mor b) : S₂.carrier` → `: S₂`
+-/
+
+#check @Morphism.mor
+-- @Morphism.mor : {S₁ : Semigroup} → {S₂ : Semigroup} → Morphism S₁ S₂ → S₁.carrier → S₂.carrier
+
+instance (S₁ S₂ : Semigroup) : CoeFun (Morphism S₁ S₂) (fun _ => S₁ → S₂) where
+  coe := Morphism.mor
+-- `f : Morphism S₁ S₂`に対して`f.mor (a * a * a)`を`f (a * a * a)`と書けるようになる
+
+theorem resp_mul {S₁ S₂ : Semigroup} (f : Morphism S₁ S₂)
+                 : ∀ (a b : S₁), f (a * b) = (f a) * (f b) :=
+  f.resp_mul
+
+example (S₁ S₂ : Semigroup) (f : Morphism S₁ S₂)
+        : ∀ (a : S₁), f (a * a * a) = f a * f a * f a :=
+  fun a : S₁ =>
+  calc f (a * a * a)
+    _ = f (a * a) * f a := f.resp_mul _ _ -- `*`の左結合に注意
+    _ = f a * f a * f a := congrArg (· * _) (f.resp_mul _ _)

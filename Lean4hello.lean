@@ -5,3 +5,4 @@ import «Lean4hello».Chapter3
 import «Lean4hello».Chapter4
 import «Lean4hello».Chapter7
 import «Lean4hello».Chapter8
+import «Lean4hello».Chapter10
