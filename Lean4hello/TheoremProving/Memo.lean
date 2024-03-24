@@ -1756,7 +1756,7 @@ def ack : Nat → Nat → Nat
   | 0,   y   => y+1
   | x+1, 0   => ack x 1
   | x+1, y+1 => ack x (ack (x+1) y)
-termination_by ack x y => (x, y) -- 別になくても動く（Leanが導出するらしい）
+termination_by x y => (x, y) -- 別になくても動く（Leanが導出するらしい）
 
 #eval ack 3 5
 
@@ -1774,7 +1774,7 @@ where
         r
     else
       r
-termination_by go i r => as.size - i -- これはないとエラーになる。
+termination_by as.size - i -- これはないとエラーになる。
 -- 整礎関係`≺`を明示
 -- `(i, r) ≺ (j, r) ↔ as.size - i < as.size - j`
 -- `i`が増えていけば`as.size - i`は減っていく。
@@ -1828,8 +1828,8 @@ def ack' : Nat → Nat → Nat
   | 0,   y   => y+1
   | x+1, 0   => ack' x 1
   | x+1, y+1 => ack' x (ack' (x+1) y)
-termination_by ack' x y => (x, y)
-decreasing_by
+termination_by x y => (x, y)
+decreasing_by all_goals -- from Lean v4.6.0
   simp_wf
   first | apply Prod.Lex.right; simp_arith
           -- これで (x+1, y) ≺ (x+1, y+1) -- 3番目のケースの第2引数
@@ -1837,6 +1837,7 @@ decreasing_by
           -- これで (x,   1) ≺ (x+1, 0)   -- 2番目のケース
           -- と     (x, ...) ≺ (x+1, y+1) -- 3番目のケースの外側
   -- タクティク全然わからん
+  -- v4.6.0で`all_goals`を明示するようになって分かりやすくなった！
 
 def unsound (x : Nat) : False :=
   unsound (x + 1)
