@@ -11,7 +11,7 @@ powershell -ExecutionPolicy Bypass -f elan-init.ps1
 del elan-init.ps1
 
 elan self update
-elan default leanprover/lean4:stable
+elan toolchain install leanprover/lean4:4.6.1
 ```
 
 Build and run:
