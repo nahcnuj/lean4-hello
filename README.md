@@ -1,6 +1,7 @@
 # Hello, Lean 4
 
 - [Theorem Proving in Lean 4 日本語訳](https://aconite-ac.github.io/theorem_proving_in_lean4_ja/title_page.html)
+- [Functional Programming in Lean](https://leanprover.github.io/functional_programming_in_lean/title.html)
 
 ## Initialization
 

@@ -2,3 +2,4 @@
 -- Import modules here that should be built as part of the library.
 import «Lean4hello».Basic
 import «Lean4hello».TheoremProving
+import «Lean4hello».FunctionalProgramming
