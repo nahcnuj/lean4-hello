@@ -1,4 +1,6 @@
-# Hello Lean 4
+# Hello, Lean 4
+
+- [Theorem Proving in Lean 4 日本語訳 \- Theorem Proving in Lean 4 日本語訳](https://aconite-ac.github.io/theorem_proving_in_lean4_ja/title_page.html)
 
 ## Initialization
 
