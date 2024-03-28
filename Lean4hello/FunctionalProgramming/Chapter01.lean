@@ -10,11 +10,13 @@ namespace Chapter01
 -/
 namespace Section01
 
+section Exercise
 example : 42 + 19 = 61 := rfl
 example : String.append "A" (String.append "B" "C") = "ABC" := rfl
 example : String.append (String.append "A" "B") "C" = "ABC" := rfl
 example : (if 3 == 3 then 5 else 7 : Nat) = 5 := rfl
 example : (if 3 == 4 then "equal" else "not equal" : String) = "not equal" := rfl
+end Exercise
 
 end Section01
 
@@ -159,6 +161,7 @@ def Point.modifyBoth (f : Float → Float) (p : Point) : Point :=
 
 -- #eval q.modifyBoth Float.floor -- { x := 4.000000, y := 3.000000 }
 
+section Exercise
 /-- 直方体 -/
 structure RectangularPrism where
   height : Float
@@ -199,6 +202,7 @@ example : String → String → Float → Book := Book.makeBook -- `mk`*では�
 example : Book → String                  := Book.title
 example : Book → String                  := Book.author
 example : Book → Float                   := Book.price
+end Exercise
 
 end Section04
 
@@ -335,3 +339,297 @@ decreasing_by
   exact h
 
 end Section05
+
+/-
+## 1.6 Polymorphism（多態性、多相性）
+
+本書でpolymorphismは型を引数に取るdatatypeやdefinitionを指す。
+-/
+namespace Section06
+
+/--
+`PPoint`は座標について特定の表現を要求しない点を表現する型
+-/
+structure PPoint (α : Type) : Type where
+  x : α
+  y : α
+  deriving Repr
+
+/--
+`natOrigin`は座標が自然数型である点としての原点を表す。
+
+`PPoint`の（型）引数`α`がここでは`Nat`になっている。
+-/
+def natOrigin : PPoint Nat :=
+  { x := Nat.zero, y := Nat.zero }
+
+/--
+`replaceX`は第2引数の点のx座標を第3引数の値に置き換えた点を返す。
+-/
+def replaceX (α : Type) (point : PPoint α) (newX : α) : PPoint α :=
+  { point with x := newX }
+
+example : (α : Type) → PPoint α   → α   → PPoint α   := replaceX
+-- 第1引数`α`で、第2引数以降の引数の型に現れる`α`が置き換えられる。
+example :              PPoint Nat → Nat → PPoint Nat := replaceX Nat
+
+example :                           Nat → PPoint Nat := replaceX Nat natOrigin
+example :                                 PPoint Nat := replaceX Nat natOrigin 5
+
+example : replaceX Nat natOrigin 5 = { x := 5, y := 0 } := rfl
+
+inductive Sign : Type where
+  | pos
+  | neg
+
+def posOfNegThree (s : Sign)
+  : match s with
+    | Sign.pos => Nat
+    | Sign.neg => Int
+  := match s with
+      | Sign.pos => ( 3 : Nat)
+      | Sign.neg => (-3 : Int)
+
+example : Nat := posOfNegThree Sign.pos
+example : Int := posOfNegThree Sign.neg
+
+example : posOfNegThree Sign.pos = ( 3 : Nat) := rfl
+example : posOfNegThree Sign.neg = (-3 : Int) := rfl
+
+def primesUnder10 : List Nat := [2, 3, 5, 7]
+
+namespace Hidden
+inductive List (α : Type) : Type where
+  | nil  : List α
+  | cons : α → List α → List α
+end Hidden
+
+def explicitPrimesUnder10 : List Nat :=
+  List.cons 2 (List.cons 3 (List.cons 5 (List.cons 7 List.nil)))
+
+example : primesUnder10 = explicitPrimesUnder10 := rfl
+
+def length (α : Type) (xs : List α) : Nat :=
+  match xs with
+    | []      => Nat.zero
+    | _ :: ys => Nat.succ (length α ys)
+
+example : length Nat primesUnder10 = 4 := rfl
+
+-- 引数を`()`の代わりに`{}`で囲むと省略可になる。
+def replaceX' {α : Type} (point : PPoint α) (newX : α) : PPoint α :=
+  { point with x := newX }
+
+example : replaceX' natOrigin 5 = { x := 5, y := 0 } := rfl
+
+def length' {α : Type} (xs : List α) : Nat :=
+  match xs with
+    | []      => Nat.zero
+    | _ :: ys => Nat.succ (length' ys)
+
+example : length' primesUnder10 = 4 := rfl
+
+-- 標準ライブラリの`List`は`length`関数を持つ。
+example : primesUnder10.length = 4 := rfl
+
+-- List Intに対してだけ動作するList.lengthが欲しければαにIntを指定する。
+example : List Int → Nat := List.length (α := Int)
+
+namespace Hidden
+inductive Option (α : Type) : Type where
+  | none
+  | some (val : α)
+end Hidden
+
+example : Option Nat := Option.none
+example : Option Nat := Option.some 42
+
+example : Option (Option Nat) := Option.none
+example : Option (Option Nat) := Option.some Option.none
+example : Option (Option Nat) := Option.some (Option.some 360)
+
+def List.head? {α : Type} (xs : List α) : Option α :=
+  match xs with
+    | []     => Option.none
+    | y :: _ => Option.some y
+
+example : primesUnder10.head? = Option.some 2 := rfl
+
+-- `[]`や`Option.none`からは`α`を推論できないので明示してあげる必要がある。
+example : [].head? (α := Int)   = Option.none := rfl
+-- 型アノテーションでも良い。
+example : ([] : List Int).head? = Option.none := rfl
+
+namespace Hidden
+structure Prod (α β : Type) : Type where
+  fst : α
+  snd : β
+end Hidden
+
+example (α β : Type) : (α × β) = Prod α β := rfl
+
+def fives  : Prod String Int := { fst := "five", snd := 5 }
+def fives' : String × Int    := ("five", 5)
+example : fives = fives' := rfl
+
+-- どちらの表記も右結合
+def sevens  : String ×  Int × Nat  := ("VII",  7, 4 + 3 )
+def sevens' : String × (Int × Nat) := ("VII", (7, 4 + 3))
+example : sevens = sevens' := rfl
+
+namespace Hidden
+inductive Sum (α β : Type) : Type where
+  | inl : α → Sum α β
+  | inr : β → Sum α β
+end Hidden
+
+-- `⊕`は`\oplus`か`\o+`で入力できる
+def PetName : Type := String ⊕ String
+
+-- `Sum.inl`を犬の名前に、`Sum.inr`を猫の名前に使う、というようなことができる。
+def animals : List PetName :=
+  [Sum.inl "Spot", Sum.inr "Tiger", Sum.inl "Fifi", Sum.inl "Rex", Sum.inr "Floof"]
+  -- 犬、猫、犬、犬、猫
+
+/--
+`countDogs`は犬か猫の名前のリストから、犬の名前の数を返す。
+-/
+def countDogs (pets : List PetName) : Nat :=
+  match pets with
+    | []                    => Nat.zero
+    | Sum.inl _ :: morePets => Nat.succ (countDogs morePets) -- 犬（なので数える）
+    | Sum.inr _ :: morePets => countDogs morePets            -- 猫（なので数えない）
+
+example : countDogs animals = 3 := rfl
+
+namespace Hidden
+inductive Unit : Type where
+  | unit : Unit
+end Hidden
+
+example : Unit.unit = () := rfl
+
+inductive ArithExpr (ann : Type) : Type
+  | nat  : ann → Nat → ArithExpr ann
+  | plus : ann → ArithExpr ann → ArithExpr ann → ArithExpr ann
+
+abbrev SourcePos := Nat
+example : ArithExpr SourcePos := ArithExpr.nat 1 5 -- 1行目にある`5`、みたいな
+
+example : ArithExpr Unit := ArithExpr.nat () 42 -- 上の`SourcePos`に当たるような情報がない、といえる
+
+namespace Hidden
+inductive Empty : Type
+-- no constructor
+end Hidden
+
+example : Type := Sum Nat Empty -- 右`Sum.inr`は使えない
+example : Sum Nat Empty := Sum.inl 42
+
+/-
+Sum type, Product type, Unit typeの名前について
+
+`α`型が`n`個の異なる値からなり、`b`型が`k`個の異なる値からなるとき、
+Sum type     `α ⊕ β`は---それらの和---`n + k`個の値、
+Product type `α × β`は---それらの積---`n * k`個の値からなる。
+
+`Unit`型はただ1つの値`()`からなる。
+
+`Bool`型は`true`,`false`の2つの値からなるから、
+`Bool × Unit`型は`2 * 1 = 2`個の値---`(true, ()), (false, ())`---からなる。
+`Bool ⊕ Unit`型は`2 + 1 = 3`個の値---`Sum.inl true, Sum.inl true, Sum.inr ()`---からなる。
+-/
+
+example : Type 0 = Type := rfl
+
+inductive MyType : Type 1 where
+  | ctor : (α : Type) → α → MyType
+-- `Type`型を引数に取る関数は1つ上のuniverse levelに属する。
+
+-- 定義しようとしている型をコンストラクタの引数で使うようなことはできない。
+/-
+inductive MyType' where
+  | ctor : (MyType' → Nat) → MyType'
+--          ^^^^^^^
+-/
+
+section Exercise
+
+def List.last? {α : Type} (xs : List α) : Option α :=
+  match xs with
+    | []      => Option.none
+    | y :: [] => Option.some y
+    | _ :: ys => List.last? ys
+
+example : List.last? [] (α := Nat) = Option.none := rfl
+example : List.last? (42 :: List.nil) = (42 : Nat) := rfl
+example : List.last? [1, 2, 3] = (3 : Nat) := rfl
+
+def List.findFirst? {α : Type} (xs : List α) (predicate : α → Bool) : Option α :=
+  match xs with
+    | []      => Option.none
+    | x :: xs =>
+        match predicate x with
+          | true  => Option.some x
+          | false => List.findFirst? xs predicate
+
+example : List.findFirst? []              (fun x : Nat => x == 3) = Option.none   := rfl
+example : List.findFirst? [3]             (fun x : Nat => x == 3) = Option.some 3 := rfl
+example : List.findFirst? [1, 2, 3, 4, 3] (fun x : Nat => x == 3) = Option.some 3 := rfl
+example : List.findFirst? [1, 2, 1, 2, 1] (fun x : Nat => x == 3) = Option.none   := rfl
+
+def Prod.swap {α β : Type} (pair : α × β) : β × α :=
+  (pair.snd, pair.fst)
+
+example : Prod.swap (3, -2) = (-2, 3) := rfl
+
+inductive PetName' : Type where
+  | dog : String → PetName'
+  | cat : String → PetName'
+example : PetName' := PetName'.dog "Foo"
+example : PetName' := PetName'.cat "Bar"
+
+def animals' : List PetName' :=
+  [PetName'.dog "Spot", PetName'.cat "Tiger", PetName'.dog "Fifi", PetName'.dog "Rex", PetName'.cat "Floof"]
+
+def countDogs' (pets : List PetName') : Nat :=
+  match pets with
+    | []                         => Nat.zero
+    | PetName'.dog _ :: morePets => Nat.succ (countDogs' morePets) -- 犬（なので数える）
+    | PetName'.cat _ :: morePets => countDogs' morePets            -- 猫（なので数えない）
+
+example : countDogs' animals' = 3 := rfl
+
+def zip {α β : Type} (xs : List α) (ys : List β) : List (α × β) :=
+  match xs, ys with
+    | [],      _       => []
+    | _,       []      => []
+    | x :: xs, y :: ys => (x, y) :: zip xs ys
+
+example : zip [] []                  = ([] : List (Nat × Int)) := rfl
+example : zip [1, 2, 3] []           = ([] : List (Nat × Int)) := rfl
+example : zip [] [-3, -2, -1]        = ([] : List (Nat × Int)) := rfl
+example : zip [1, 2, 3] [-3, -2, -1] = [(1, -3), (2, -2), (3, -1)] := rfl
+example : zip [1, 2, 3] [-3, -2]     = [(1, -3), (2, -2)] := rfl
+
+def take {α : Type} (n : Nat) (xs : List α) : List α :=
+  match n, xs with
+    | Nat.zero,   _       => []
+    | _,          []      => []
+    | Nat.succ k, x :: xs => x :: take k xs
+
+example : take 3 ["bolete", "oyster"] = ["bolete", "oyster"] := rfl
+example : take 1 ["bolete", "oyster"] = ["bolete"]           := rfl
+
+def f {α β γ : Type} (x : α × (β ⊕ γ)) : (α × β) ⊕ (α × γ) :=
+  match (x.snd : β ⊕ γ) with
+    | Sum.inl b => Sum.inl (x.fst, b)
+    | Sum.inr c => Sum.inr (x.fst, c)
+
+def g {α : Type} (x : Bool × α) : α ⊕ α :=
+  match x.fst with
+    | true  => Sum.inl x.snd
+    | false => Sum.inr x.snd
+end Exercise
+
+end Section06
