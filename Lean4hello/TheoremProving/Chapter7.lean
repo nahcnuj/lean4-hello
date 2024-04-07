@@ -84,18 +84,18 @@ theorem and_assoc {a b c : Bool} : (a & b) & c = a & (b & c) := by
   | true  => rfl -- and b c = and b c
   | false => rfl -- false = false
 
-theorem or_self {a : Bool} : a ∣ a = a := by
+theorem or_self {a : Bool} : (a ∣ a) = a := by
   cases a <;> rfl
 
-theorem true_or {b : Bool} : true ∣ b = true := by
+theorem true_or {b : Bool} : (true ∣ b) = true := by
   rfl
-theorem or_true {a : Bool} : a ∣ true = true := by
+theorem or_true {a : Bool} : (a ∣ true) = true := by
   cases a <;> rfl
 
-theorem or_comm {a b : Bool} : a ∣ b = b ∣ a := by
+theorem or_comm {a b : Bool} : (a ∣ b) = b ∣ a := by
   cases a <;> cases b <;> rfl
 
-theorem or_assoc {a b c : Bool} : a ∣ b ∣ c = a ∣ (b ∣ c) := by
+theorem or_assoc {a b c : Bool} : (a ∣ (b ∣ c)) = a ∣ (b ∣ c) := by
   cases a <;> rfl
 
 theorem or_and {a b c : Bool} : (a ∣ b) & c = a & c ∣ b & c := by

@@ -46,7 +46,7 @@ theorem natToBin_double (n : Nat) : natToBin ((n+1) * 2) = natToBin (n+1) ++ [0]
           (show 1 * 2 ≤ (m + 1) * 2 from Nat.mul_le_mul_right 2 (Nat.succ_le_of_lt (Nat.zero_lt_succ m)))
       calc natToBin ((n+2) * 2)
         _ = natToBin ((n+1) * 2 + 2)                          := congrArg _ (Nat.succ_mul ..)
-        _ = natToBin (((n+1) * 2 + 2) / 2) ++ [(n+1) * 2 % 2] := by conv => lhs; unfold natToBin; simp
+        _ = natToBin (((n+1) * 2 + 2) / 2) ++ [(n+1) * 2 % 2] := by conv => lhs; unfold natToBin
         _ = natToBin (n+2) ++ [(n+1) * 2 % 2] :=
               have : ((n+1) * 2 + 2) / 2 = n+2 :=
                 calc ((n+1) * 2 + 2) / 2
@@ -193,11 +193,11 @@ theorem mul_succ : ∀ (n m : Nat), mul n (succ m) = add (mul n m) n
 
 theorem zero_mul : ∀ (m : Nat), mul zero m = zero
   | zero   => by rfl
-  | succ m => by simp [mul_succ, add_zero, zero_mul]
+  | succ m => by simp [mul_succ, add_zero, zero_mul m]
 theorem succ_mul : ∀ (n m : Nat), mul (succ n) m = add (mul n m) m
   | _,      zero   => by rfl
-  | zero,   succ m => by simp [mul_succ, add_succ, add_zero, succ_mul]
-  | succ n, succ m => by simp [mul_succ, add_succ, succ_mul, succ_add, add_assoc, add_comm n m]
+  | zero,   succ m => by simp [mul_succ, add_succ, add_zero, succ_mul _ m]
+  | succ n, succ m => by simp [mul_succ, add_succ, succ_mul _ m, succ_add, add_assoc, add_comm n m]
 
 theorem mul_comm : ∀ (n m : Nat), mul n m = mul m n
   | zero,   zero   => by rfl
@@ -219,7 +219,7 @@ theorem left_distrib : ∀ (n m k : Nat), mul n (add m k) = add (mul n m) (mul n
 
 theorem mul_assoc : ∀ (n m k : Nat), mul (mul n m) k = mul n (mul m k)
   | n, m, zero   => by rfl
-  | n, m, succ k => by simp [mul_succ, mul_assoc, left_distrib]
+  | n, m, succ k => by simp [mul_succ, mul_assoc _ _ k, left_distrib]
 -- Nat.mul_assocの証明をカンニングしてしまった
 
 theorem mul_left_comm : ∀ (n m k : Nat), mul n (mul m k) = mul m (mul n k)
