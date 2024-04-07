@@ -26,6 +26,6 @@ PS C:\Users\user\work\lean4hello> lake build
 [2/6] Building Main
 [3/6] Compiling Main
 [6/6] Linking lean4hello.exe
-PS C:\Users\user\work\lean4hello> .\.lake\build\bin\lean4hello.exe     
+PS C:\Users\user\work\lean4hello> lake exe lean4hello
 Hello, world!
 ```
