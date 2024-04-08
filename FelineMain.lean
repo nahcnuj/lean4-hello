@@ -15,24 +15,26 @@ partial def dump (stream : IO.FS.Stream) : IO Unit := do
     -- reached EOF
     pure ()
   else /- do -/
-    let stdout ← IO.getStdout
-    stdout.write buf
+    -- let stdout ← IO.getStdout
+    -- stdout.write buf
+    (← IO.getStdout).write buf -- この`←`は*最も近い*`else`の`do`に持ち上げられ(lifted)、その結果は一意な名前に束縛され、`(← ...)`はその名前で置き換えられる
     dump stream -- 末尾再帰
 
 /--
 `fileStream`はファイル名を受け取り、そのファイルが存在すればストリームを返し、存在しなければ`none`を返すIOアクションである。
 -/
 def fileStream (filename : System.FilePath) : IO (Option IO.FS.Stream) := do
-  let fileExists ← filename.pathExists
-  if not fileExists then
-    let stderr ← IO.getStderr
-    stderr.putStrLn s!"File not found: {filename}"
+  -- let fileExists ← filename.pathExists
+  if not (← filename.pathExists) then /- do -/
+    (← IO.getStderr).putStrLn s!"File not found: {filename}"
     pure none -- noneを返す
-  else
+  else /- do -/
     -- ファイルを読み取りモードで開く（ファイルハンドラを生成する）
     let handle : IO.FS.Handle ← IO.FS.Handle.mk filename IO.FS.Mode.read
     -- ファイルハンドラからStream構造体を生成する
     pure (some (IO.FS.Stream.ofHandle handle))
+    -- -- `handle`もnested actionにできるが、ここはそこまでしない方が短くて簡潔だろう：
+    -- pure (some (IO.FS.Stream.ofHandle (← IO.FS.Handle.mk filename IO.FS.Mode.read)))
   -- ファイルハンドラが参照されなくなったらファイナライザがファイルディスクリプタを閉じる
 
 /--
