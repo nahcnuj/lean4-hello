@@ -10,3 +10,6 @@ lean_lib «Lean4hello» where
 @[default_target]
 lean_exe «lean4hello» where
   root := `Main
+
+lean_exe «feline» where
+  root := `FelineMain

@@ -28,3 +28,15 @@ PS C:\Users\user\work\lean4hello> lake build
 PS C:\Users\user\work\lean4hello> lake exe lean4hello
 Hello, world!
 ```
+
+[Feline](https://leanprover.github.io/functional_programming_in_lean/hello-world/cat.html):
+
+```
+PS C:\Users\user\work\lean4hello> lake build feline
+[0/2] Building FelineMain
+[1/2] Compiling FelineMain
+[2/2] Linking feline.exe
+PS C:\Users\user\work\lean4hello> echo "It works!" | lake exe feline
+It works!
+PS C:\Users\user\work\lean4hello>
+```
