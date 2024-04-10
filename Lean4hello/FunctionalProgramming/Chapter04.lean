@@ -258,3 +258,68 @@ example : Even := 254
 -- 127回まで再帰してくれた
 
 end Exercise
+
+def addNatPos : Nat → Pos → Pos
+  | Nat.zero,   p => p
+  | Nat.succ n, p => Pos.succ (addNatPos n p)
+
+def addPosNat : Pos → Nat → Pos
+  | p, Nat.zero   => p
+  | p, Nat.succ n => Pos.succ (addPosNat p n)
+
+instance : HAdd Nat Pos Pos where
+  hAdd := addNatPos
+
+instance : HAdd Pos Nat Pos where
+  hAdd := addPosNat
+
+example : (3 : Nat) + (5 : Pos) = (8 : Pos) := rfl
+example : (3 : Pos) + (5 : Nat) = (8 : Pos) := rfl
+
+class HPlus (α : Type u) (β : Type v) (γ : Type w) where
+  hPlus : α → β → γ
+
+instance : HPlus Nat Pos Pos where
+  hPlus := addNatPos
+instance : HPlus Pos Nat Pos where
+  hPlus := addPosNat
+example : (HPlus.hPlus (3 : Nat) (5 : Pos)) = (8 : Pos) := rfl
+example : (HPlus.hPlus (3 : Pos) (5 : Nat)) = (8 : Pos) := rfl
+
+/-
+#eval (HPlus.hPlus (3 : Nat) (5 : Pos))
+-- Error: typeclass instance problem is stuck, it is often due to metavariables: HPlus Nat Pos ?m.22024
+-/
+
+class HPlus' (α : Type u) (β : Type v) (γ : outParam (Type w)) where
+  hPlus : α → β → γ
+instance : HPlus' Nat Pos Pos where
+  hPlus := addNatPos
+instance : HPlus' Pos Nat Pos where
+  hPlus := addPosNat
+
+#eval (HPlus'.hPlus (3 : Nat) (5 : Pos)) -- 8 : Pos
+
+instance [Add α] : HPlus' α α α where
+  hPlus := Add.add
+
+example : HPlus'.hPlus (3 : Nat) (5 : Nat) = (8 : Nat) := rfl
+
+#check HPlus'.hPlus (3 : Nat) -- : ?m.22246 → ?m.22248
+
+@[default_instance]
+instance [Add α] : HPlus' α α α where
+  hPlus := Add.add
+
+#check HPlus'.hPlus (3 : Nat) -- : Nat → Nat
+#check HPlus'.hPlus (5 : Pos) -- : Pos → Pos
+
+namespace Exercise
+
+instance [Mul α] : HMul (PPoint α) α (PPoint α) where
+  hMul p k := { x := k * p.x, y := k * p.y : PPoint α }
+
+#eval { x := 2.5, y := 3.7 : PPoint Float } * 2.0
+-- { x := 5.000000, y := 7.400000 }
+
+end Exercise
