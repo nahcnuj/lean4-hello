@@ -1,9 +1,6 @@
-namespace FunctionalProgramming
-
 /-
 # Chapter 4: Overloading and Type Classes
 -/
-namespace Chapter04
 
 inductive Pos : Type where
   | one  : Pos
@@ -201,5 +198,63 @@ def runTests : IO Unit := do
         run tests
   run tests
 #eval runTests
+
+end Exercise
+
+#check (IO.println) --  IO.println : ?m.18037 → IO Unit
+#check @IO.println  -- @IO.println : {α : Type u_1} → [inst : ToString α] → α → IO Unit
+
+example {α : Type u} [ToString α] : α → IO Unit := IO.println
+
+/--
+`List.sum`は、`+`（型クラス`Add`）と`0`（`OfNat α 0`）が定義されている型`α`のリストを受け取り、リストの値の総和を返す関数です。
+-/
+def List.sum {α : Type u} [Add α] [OfNat α 0] : List α → α
+  | []      => (0 : α)
+  | a :: as => a + List.sum as
+
+def fourNats : List Nat := [1,2,3,4]
+example : fourNats.sum = 10 := rfl
+
+def fourPos : List Pos := [1,2,3,4]
+-- example : fourPos.sum = 10 := rfl -- Error: failed to synthesize instance: OfNat Pos 0
+-- `0 : Pos`が存在しないのでエラー！
+
+structure PPoint (α : Type u) where
+  x : α
+  y : α
+  deriving Repr
+
+instance [Add α]: Add (PPoint α) where
+  add p q := { x := p.x + q.x, y := p.y + q.y : PPoint α }
+
+/-
+@OfNat.ofNat : {α : Type u_1} → (x : Nat) → [self : OfNat α x] → α
+                                ^^^^^^^^^
+                                 explicit
+
+class OfNat (α : Type u) (_ : Nat) where
+  ofNat : α
+         ^^^just α
+-/
+
+example : (OfNat.ofNat (2 : Nat) : Pos) = (2 : Pos) := rfl
+
+namespace Exercise
+
+instance : OfNat Even 0 where
+  ofNat := Even.zero
+example : Even := 0
+
+instance {prev : Nat} [OfNat Even prev] : OfNat Even (prev + 2) where
+  ofNat := Even.next (OfNat.ofNat prev)
+example : Even := 2
+example : Even := 4
+example : Even := 6
+example : Even := 8
+example : Even := 128
+example : Even := 254
+-- example : Even := 256 -- Error: failed to synthesize instance: OfNat Even 256
+-- 127回まで再帰してくれた
 
 end Exercise
