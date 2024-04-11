@@ -323,3 +323,117 @@ instance [Mul α] : HMul (PPoint α) α (PPoint α) where
 -- { x := 5.000000, y := 7.400000 }
 
 end Exercise
+
+def northernTrees : Array String := #["sloe", "birch", "elm", "oak"]
+-- #check northernTrees[5] -- Error: failed to prove index is valid
+-- #eval northernTrees[5] -- Crashed!
+
+structure NonEmptyList (α : Type u) : Type u where
+  head : α
+  tail : List α
+
+def witchNumber4 : NonEmptyList String := {
+  head := "HAL",
+  tail := [
+    "ROna",
+    "HI-ME",
+    "100Ka",
+  ],
+}
+
+def NonEmptyList.get? : NonEmptyList α → Nat → Option α
+  -- 0番目には要素が必ず存在する
+  | { head := h, tail := _ }, Nat.zero => some h
+  -- 1番目以降はtail次第
+  | { head := _, tail := []      }, Nat.succ _ => none
+  | { head := _, tail := x :: xs }, Nat.succ n => get? { head := x, tail := xs } n
+
+def NonEmptyList.get'? : NonEmptyList α → Nat → Option α
+  | xs, Nat.zero   => some xs.head
+  | xs, Nat.succ n => xs.tail.get? n -- `List.get?`を使っている
+
+abbrev NonEmptyList.inBounds (xs : NonEmptyList α) (i : Nat) : Prop :=
+  i ≤ xs.tail.length
+
+theorem witchNumber4HasZerothMember : witchNumber4.inBounds 0 :=
+  show 0 ≤ witchNumber4.tail.length from
+    Nat.zero_le witchNumber4.tail.length
+
+example : witchNumber4.inBounds 1 :=
+  show 1 ≤ witchNumber4.tail.length from
+    calc 1
+      _ ≤ 2                        := Nat.le_succ _
+      _ ≤ 3                        := Nat.le_succ _
+      _ = witchNumber4.tail.length := rfl
+
+example : witchNumber4.inBounds 3 :=
+  show 3 ≤ witchNumber4.tail.length from
+    calc 3
+      _ ≤ 3                        := Nat.le_of_eq rfl
+      _ = witchNumber4.tail.length := rfl
+
+example : ¬(witchNumber4.inBounds 4) :=
+  show ¬(4 ≤ witchNumber4.tail.length) from
+  show ¬(4 ≤ 3) from
+    Nat.not_succ_le_self 3
+
+def NonEmptyList.get : (xs : NonEmptyList α) → (i : Nat) → (xs.inBounds i) → α
+  | xs, Nat.zero,   _  => xs.head
+  | xs, Nat.succ n, ok => xs.tail[n]'ok
+      -- xs.inBounds i は i ≤ xs.tail.length で Nat.succ n ≤ xs.tail.length つまり n < xs.tail.length だから要素は存在する
+
+/-
+GetElem.{u, v, w}
+  (cont : Type u)                      -- リストの型
+  (idx : Type v)                       -- インデックスの型
+  (elem : outParam (Type w))           -- リストから得られる要素の型
+  (dom : outParam (cont → idx → Prop)) -- リストxsにインデックスiの要素が存在するか否かを表す述語
+  : Type (max (max u v) w)
+-/
+instance :
+  GetElem
+    (NonEmptyList α)      -- リストの型
+    Nat                   -- インデックスの型
+    α                     -- リストから得られる要素の型
+    NonEmptyList.inBounds -- リストxsにインデックスiの要素が存在するか否かを表す述語
+where
+  getElem := NonEmptyList.get
+
+-- outParamは与えなくても推論してくれるという目印。
+#check GetElem.getElem witchNumber4 0 -- getElem witchNumber4 0 : NonEmptyList.inBounds witchNumber4 0 → String
+-- メソッドに与えなくて済むわけではない。
+example : GetElem.getElem witchNumber4 0 witchNumber4HasZerothMember = "HAL" := rfl
+
+example : witchNumber4[0] = "HAL"   := rfl
+example : witchNumber4[1] = "ROna"  := rfl
+example : witchNumber4[2] = "HI-ME" := rfl
+example : witchNumber4[3] = "100Ka" := rfl
+/-
+この書き方で証明がいらないのは
+> `arr[i]`: proves the proof side goal by `get_elem_tactic`
+ということなのだろう。
+-/
+example : witchNumber4[0]'(by get_elem_tactic) = "HAL" := rfl
+
+--
+
+-- #check witchNumber4[4] -- Error: failed to prove index is valid
+
+instance : GetElem (List α) Pos α (fun xs i => i.toNat < xs.length) where
+  getElem xs i (ok : i.toNat < xs.length) := xs[i.toNat]'ok
+
+def wn4 : List String := witchNumber4.head :: witchNumber4.tail
+
+example : wn4[(1 : Pos)] = "ROna"  := rfl
+example : wn4[(2 : Pos)] = "HI-ME" := rfl
+example : wn4[(3 : Pos)] = "100Ka" := rfl
+
+/--
+p : PPoint α に対してp[false] = x、p[true] = yを返す。
+要素の存在性を表す述語は任意の b : Bool に対して真とすれば良い。
+-/
+instance : GetElem (PPoint α) Bool α (fun _ _ => True) where
+  getElem p b _ := if b then p.y else p.x
+
+example : { x := 3, y := 5 : PPoint Nat }[false] = 3 := rfl
+example : { x := 3, y := 5 : PPoint Nat }[true]  = 5 := rfl
