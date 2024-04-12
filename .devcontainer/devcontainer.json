@@ -8,7 +8,8 @@
       "extensions": [
         "leanprover.lean4",
         "ms-azuretools.vscode-docker",
-        "github.vscode-github-actions"
+        "github.vscode-github-actions",
+        "ms-vscode.live-server"
       ]
     }
   }

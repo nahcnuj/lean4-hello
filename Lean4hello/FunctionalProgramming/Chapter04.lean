@@ -1,4 +1,4 @@
-/-
+/--
 # Chapter 4: Overloading and Type Classes
 -/
 
@@ -197,12 +197,12 @@ def runTests : IO Unit := do
         test
         run tests
   run tests
-#eval runTests
+-- #eval runTests
 
 end Exercise
 
-#check (IO.println) --  IO.println : ?m.18037 → IO Unit
-#check @IO.println  -- @IO.println : {α : Type u_1} → [inst : ToString α] → α → IO Unit
+-- #check (IO.println) --  IO.println : ?m.18037 → IO Unit
+-- #check @IO.println  -- @IO.println : {α : Type u_1} → [inst : ToString α] → α → IO Unit
 
 example {α : Type u} [ToString α] : α → IO Unit := IO.println
 
@@ -298,30 +298,31 @@ instance : HPlus' Nat Pos Pos where
 instance : HPlus' Pos Nat Pos where
   hPlus := addPosNat
 
-#eval (HPlus'.hPlus (3 : Nat) (5 : Pos)) -- 8 : Pos
+example : HPlus'.hPlus (3 : Nat) (5 : Pos) = (8 : Pos) := rfl
 
 instance [Add α] : HPlus' α α α where
   hPlus := Add.add
 
 example : HPlus'.hPlus (3 : Nat) (5 : Nat) = (8 : Nat) := rfl
 
-#check HPlus'.hPlus (3 : Nat) -- : ?m.22246 → ?m.22248
+-- #check HPlus'.hPlus (3 : Nat) -- : ?m.22246 → ?m.22248
 
 @[default_instance]
 instance [Add α] : HPlus' α α α where
   hPlus := Add.add
 
-#check HPlus'.hPlus (3 : Nat) -- : Nat → Nat
-#check HPlus'.hPlus (5 : Pos) -- : Pos → Pos
+-- #check HPlus'.hPlus (3 : Nat) -- : Nat → Nat
+-- #check HPlus'.hPlus (5 : Pos) -- : Pos → Pos
 
 namespace Exercise
 
 instance [Mul α] : HMul (PPoint α) α (PPoint α) where
   hMul p k := { x := k * p.x, y := k * p.y : PPoint α }
 
+/-
 #eval { x := 2.5, y := 3.7 : PPoint Float } * 2.0
 -- { x := 5.000000, y := 7.400000 }
-
+-/
 end Exercise
 
 def northernTrees : Array String := #["sloe", "birch", "elm", "oak"]
@@ -355,7 +356,7 @@ def NonEmptyList.get'? : NonEmptyList α → Nat → Option α
 abbrev NonEmptyList.inBounds (xs : NonEmptyList α) (i : Nat) : Prop :=
   i ≤ xs.tail.length
 
-theorem witchNumber4HasZerothMember : witchNumber4.inBounds 0 :=
+theorem witchNumber4HasAtLeastOneMember : witchNumber4.inBounds 0 :=
   show 0 ≤ witchNumber4.tail.length from
     Nat.zero_le witchNumber4.tail.length
 
@@ -400,9 +401,9 @@ where
   getElem := NonEmptyList.get
 
 -- outParamは与えなくても推論してくれるという目印。
-#check GetElem.getElem witchNumber4 0 -- getElem witchNumber4 0 : NonEmptyList.inBounds witchNumber4 0 → String
+-- #check GetElem.getElem witchNumber4 0 -- getElem witchNumber4 0 : NonEmptyList.inBounds witchNumber4 0 → String
 -- メソッドに与えなくて済むわけではない。
-example : GetElem.getElem witchNumber4 0 witchNumber4HasZerothMember = "HAL" := rfl
+example : GetElem.getElem witchNumber4 0 witchNumber4HasAtLeastOneMember = "HAL" := rfl
 
 example : witchNumber4[0] = "HAL"   := rfl
 example : witchNumber4[1] = "ROna"  := rfl
@@ -429,7 +430,7 @@ example : wn4[(2 : Pos)] = "HI-ME" := rfl
 example : wn4[(3 : Pos)] = "100Ka" := rfl
 
 /--
-p : PPoint α に対してp[false] = x、p[true] = yを返す。
+$p \colon \mathrm{PPoint}~α$ に対してp[false] = x、p[true] = yを返す。
 要素の存在性を表す述語は任意の b : Bool に対して真とすれば良い。
 -/
 instance : GetElem (PPoint α) Bool α (fun _ _ => True) where

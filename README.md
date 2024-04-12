@@ -40,3 +40,8 @@ PS C:\Users\user\work\lean4hello> echo "It works!" | lake exe feline
 It works!
 PS C:\Users\user\work\lean4hello>
 ```
+
+## Generate Documentation
+```sh
+lake -R -Kenv=dev build Lean4hello:docs
+```
