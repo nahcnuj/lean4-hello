@@ -582,7 +582,7 @@ instance : HAppend (List α) (NonEmptyList α) (NonEmptyList α) where
 theorem nil_append_nonempty (ys : NonEmptyList α)
   : @List.nil α ++ ys = ys := rfl
 theorem cons_append_nonempty (x : α) (xs : List α) (ys : NonEmptyList α)
-  : List.cons x xs ++ ys = x :: xs ++ ys := rfl
+  : List.cons x xs ++ ys = ⟨x, xs ++ ys.head :: ys.tail⟩ := rfl
 
 def «Le☆S☆Ca» : List String := ["Kyoko", "Rena", "Honoka"]
 example : «Le☆S☆Ca» ++ witchNumber4 = ⟨"Kyoko", ["Rena", "Honoka"] ++ witchNumber4.toList⟩ := rfl
