@@ -1,4 +1,4 @@
-/--
+/-!
 # Chapter 4: Overloading and Type Classes
 -/
 
@@ -26,8 +26,8 @@ instance : Add Pos where
 def fourteen : Pos := seven + seven
 
 def Pos.toNat : Pos → Nat
-  | Pos.one    => 1
-  | Pos.succ n => n.toNat + 1
+  | Pos.one    => Nat.succ Nat.zero
+  | Pos.succ n => Nat.succ n.toNat
 
 example :    seven.toNat =  7 := rfl
 example : fourteen.toNat = 14 := rfl
@@ -416,8 +416,6 @@ example : witchNumber4[3] = "100Ka" := rfl
 -/
 example : witchNumber4[0]'(by get_elem_tactic) = "HAL" := rfl
 
---
-
 -- #check witchNumber4[4] -- Error: failed to prove index is valid
 
 instance : GetElem (List α) Pos α (fun xs i => i.toNat < xs.length) where
@@ -438,3 +436,155 @@ instance : GetElem (PPoint α) Bool α (fun _ _ => True) where
 
 example : { x := 3, y := 5 : PPoint Nat }[false] = 3 := rfl
 example : { x := 3, y := 5 : PPoint Nat }[true]  = 5 := rfl
+
+/--
+$\newcommand{\Pos}{\mathop{\mathrm{Pos}}\nolimits}$
+$\mathbin{\dot-} \colon \Pos × \Pos → ℕ$
+-/
+def Pos.sub : Pos → Pos → Nat
+  | .one,    _       => Nat.zero
+  | .succ n, .one    => n.toNat
+  | n,       .succ k => Pos.sub n k
+/-
+#check Nat.sub
+-- `pred`を使ってスマートに定義されている
+-/
+
+instance : HSub Pos Pos Nat where
+  hSub := Pos.sub
+
+example           : (1 : Pos) - (1 : Pos)  = (0 : Nat) := rfl
+example (k : Pos) : (1 : Pos) - Pos.succ k = (0 : Nat) := rfl
+example           : (2 : Pos) - (1 : Pos)  = (1 : Nat) := rfl
+
+/--
+$\mathbin{\mathrm{mod}} \colon \Pos × \Pos → ℕ$
+-/
+def Pos.mod (n : Pos) (k : Pos) : Nat := Nat.mod n.toNat k.toNat
+
+instance : HMod Pos Pos Nat where
+  hMod := Pos.mod
+
+example (n : Pos) : n % Pos.one = (0 : Nat) := Nat.mod_one n.toNat
+
+def Pos.pow : Pos → Nat → Pos
+  | _, .zero => Pos.one
+  | n, .succ k => n * (pow n k)
+
+instance : Pow Pos Nat where
+  pow := Pos.pow
+
+/--
+n.toNat ^ 0 = 1
+-/
+example (n : Pos) : (n ^ 0).toNat = 1 := Nat.pow_zero n.toNat
+
+/-
+-- .toNat を外して Pos のまま示すのは難しそう？
+-- Coe Pos Nat を定義すれば良いのかも。
+
+#check Int.toNat_ofNat
+
+instance : OfNat Pos Nat.zero.succ where
+  ofNat := Pos.one
+instance (n : Nat) [OfNat Pos n] : OfNat Pos n.succ where
+  ofNat := Pos.succ (OfNat.ofNat n)
+
+theorem Pos.toNat_ofNat : ∀ (n : Nat), Pos.toNat (OfNat.ofNat n.succ) = n.succ
+  | Nat.zero   => rfl
+  | Nat.succ n => sorry
+
+/-
+(n : Pos) ^ 0 = (1 : Pos)
+Pos.toNat (n : Pos) ^ 0 = (1 : Nat)
+Pos.toNat (n : Pos) ^ 0 = Pos.toNat (1 : Pos)
+-/
+-/
+
+example : (fun (x : Nat) => 1 + x) = (Nat.succ ·) := by simp [Nat.one_add]
+
+-- #check (fun (x : Nat) => 1 + x) == (Nat.succ ·) -- Error: failed to synthesize instance: BEq (Nat → Nat)
+
+example : Prop := 2 < 4
+example : 1 = if 2 < 4 then 1 else 2 := rfl
+
+instance : LT Pos where
+  -- lt : Pos → Pos → Prop
+  lt x y := x.toNat < y.toNat
+
+def Pos.comp : Pos → Pos → Ordering
+  | .one,    .one    => .eq
+  | .one,    .succ _ => .lt
+  | .succ _, .one    => .gt
+  | .succ n, .succ k => Pos.comp n k
+
+instance : Ord Pos where
+  compare := Pos.comp
+
+def Pos.hash : Pos → UInt64
+  | .one    => 0
+  | .succ n => mixHash 1 (Pos.hash n)
+
+/-
+-- 261858以上でstack overflowした
+-- `#eval`だともっと小さくてもVSCodeの拡張機能は落ちた
+def x := Pos.hash 261857 -- 123456 223456 253456 260000 261500 261750 261800 261850 261855 261857 ok < overflow 261858 261860 261875 261900 262000 262250 263000 263456 273456 283456 323456 523456 987654
+-/
+
+-- #check List.map
+example : Functor.map (· + 5) [1,2,3] = [6,7,8] := rfl
+
+-- #check Option.map
+example : Functor.map toString (some (List.cons 5 List.nil)) = some "[5]" := rfl
+example : Functor.map toString (none : Option (List Nat))    = none       := rfl
+
+example : Functor.map List.reverse [[1,2,3], [4,5,6]] = [[3,2,1], [6,5,4]] := rfl
+
+example :  (· + 5) <$> [1,2,3] = Functor.map (· + 5) [1,2,3] := rfl
+example : toString <$> (some (List.cons 5 List.nil)) = Functor.map toString (some (List.cons 5 List.nil)) := rfl
+example : List.reverse <$> [[1,2,3], [4,5,6]] = Functor.map List.reverse [[1,2,3], [4,5,6]] := rfl
+
+instance : Functor NonEmptyList where
+  map f xs := { head := f xs.head, tail := xs.tail.map f }
+
+instance : Functor PPoint where
+  map f p := { x := f p.x, y := f p.y }
+
+/--
+$\mathop{\mathrm{sq\\_abs}} : ℕ × ℕ → ℕ ; (x, y) \mapsto x^2+y^2$
+-/
+def sq_abs (p : PPoint Nat) : Nat :=
+  (p.x * p.x) + (p.y * p.y)
+
+def points : NonEmptyList (PPoint Nat) := { head := { x := 3, y := 4 : PPoint Nat }, tail := [] }
+example : Functor.map sq_abs points = { head := 25, tail := [] } := rfl
+
+example : Functor.mapConst "" witchNumber4 = { head := "", tail := ["", "", ""] } := rfl
+
+/-
+#check Option.map_id
+#check Option.map_comp_map
+-/
+
+example (x : Option α) : id <$> x = x := congrFun Option.map_id x
+example (x : Option α) : f <$> (g <$> x) = (fun y => f (g y)) <$> x := congrFun (Option.map_comp_map g f) x
+
+def NonEmptyList.toList : NonEmptyList α → List α
+  | ⟨x, xs⟩ => x :: xs
+
+namespace Exercise
+
+instance : HAppend (List α) (NonEmptyList α) (NonEmptyList α) where
+  hAppend
+    | [],      ys      => ys
+    | x :: xs, ⟨y, ys⟩ => ⟨x, xs ++ y :: ys⟩
+
+theorem nil_append_nonempty (ys : NonEmptyList α)
+  : @List.nil α ++ ys = ys := rfl
+theorem cons_append_nonempty (x : α) (xs : List α) (ys : NonEmptyList α)
+  : List.cons x xs ++ ys = x :: xs ++ ys := rfl
+
+def «Le☆S☆Ca» : List String := ["Kyoko", "Rena", "Honoka"]
+example : «Le☆S☆Ca» ++ witchNumber4 = ⟨"Kyoko", ["Rena", "Honoka"] ++ witchNumber4.toList⟩ := rfl
+
+end Exercise
