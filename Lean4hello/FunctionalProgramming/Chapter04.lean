@@ -587,4 +587,168 @@ theorem cons_append_nonempty (x : α) (xs : List α) (ys : NonEmptyList α)
 def «Le☆S☆Ca» : List String := ["Kyoko", "Rena", "Honoka"]
 example : «Le☆S☆Ca» ++ witchNumber4 = ⟨"Kyoko", ["Rena", "Honoka"] ++ witchNumber4.toList⟩ := rfl
 
+def LeSCa_WN4 : NonEmptyList String := «Le☆S☆Ca» ++ witchNumber4
+
 end Exercise
+
+instance : Coe Pos Nat where
+  coe x := x.toNat
+
+example : [1,2,3,4].drop (2 : Pos) = [3,4] := rfl
+-- #check [1,2,3,4].drop (2 : Pos)
+-- List.drop (Pos.toNat 2) [1, 2, 3, 4] : List Nat
+--            ^^^^^^^^^^^
+
+-- Coe Nat Intと連鎖
+def oneInt : Int := Pos.one
+
+
+inductive A where
+  | a
+
+inductive B where
+  | b
+  deriving Repr
+
+instance : Coe A B where
+  coe _ := B.b
+
+instance : Coe B A where
+  coe _ := A.a
+
+instance : Coe Unit A where
+  coe _ := A.a
+
+/--
+Coeにループがあってもパスを見つけられる
+```
+          ->
+Unit -> A    B
+          <-
+```
+-/
+def coercedToB : B := ()
+-- #eval coercedToB -- B.b
+
+/--
+`x : α`を`(some x : Option α)`に強制
+
+`Coe α (Option α)`? 実装は見つけられなかった
+-/
+def List.last? : List α → Option α
+  | []      => none
+  | x :: [] => x -- some x
+  | _ :: xs => List.last? xs -- some xs.last?
+
+instance : Coe (NonEmptyList α) (List α) where
+  coe
+    | { head := x, tail := xs } => x :: xs
+
+example : Exercise.LeSCa_WN4 = ["Kyoko", "Rena", "Honoka", "HAL", "ROna", "HI-ME", "100Ka"] := rfl
+
+instance : CoeDep (List α) (x :: xs) (NonEmptyList α) where
+  coe := { head := x, tail := xs }
+
+example : NonEmptyList String := ↑("x" :: ["y"] : List String)
+/-!
+```
+example : NonEmptyList String := Exercise.«Le☆S☆Ca»
+```
+↓
+```
+type mismatch
+  Exercise.«Le☆S☆Ca»
+has type
+  List String : Type
+but is expected to have type
+  NonEmptyList String : Type
+```
+-/
+
+/--
+モノイドを表す型
+-/
+structure Monoid where
+  Carrier : Type
+  neutral : Carrier
+  op : Carrier → Carrier → Carrier
+
+/--
+$(ℕ, 1, \mathbin{×})$
+-/
+def natMulMonoid : Monoid := { Carrier := Nat, neutral := 1, op := .mul }
+
+/--
+$(ℕ, 0, \mathbin{+})$
+-/
+def natAddMonoid : Monoid := { Carrier := Nat, neutral := 0, op := .add }
+
+/--
+有項(inhabited)で加算が定義されている型に対するモノイド
+-/
+def addMonoid (α : Type) [Inhabited α] [Add α] : Monoid := { Carrier := α, neutral := Inhabited.default, op := Add.add }
+
+/--
+$\newcommand{\append}{\mathbin{+\\!\\!+}}$
+$(\mathord{\mathrm{String}}, ε, \append)$
+-/
+def strAppendMonoid : Monoid := { Carrier := String, neutral := "", op := .append }
+
+/--
+$∀α ∈ \mathord{\mathrm{Type}}, (\mathop{\mathrm{List}}α, [], {\append})$
+-/
+def listAppendMonoid {α : Type} : Monoid := { Carrier := List α, neutral := .nil, op := .append }
+
+/--
+モノイド$(M, 0, {\ast})$の型をその台集合$M$の型に強制する
+-/
+instance : CoeSort Monoid Type where
+  coe m := m.Carrier
+
+/--
+モノイド$(ℕ, 1, \mathbin{×})$の型を$ℕ$の型に矯正する
+-/
+def natAsNatMulMonoid : Type := natMulMonoid
+/-
+#print natAsMonoid
+-- def natAsMonoid : Type := natMulMonoid.Carrier
+--                                       ^^^^^^^^
+-/
+
+def foldMap (M : Monoid) (f : α → M) (xs : List α) : M :=
+  let rec fold (soFar : M) : List α → M
+    | [] => soFar
+    | y :: ys => fold (M.op soFar (f y)) ys
+  fold M.neutral xs
+
+/--
+各項の2倍を総和する
+-/
+def sumDouble {α : Type} [Inhabited α] [Add α]
+  : List α → addMonoid α := -- : List α → (addMonoid α).Carrier :=
+  foldMap (addMonoid α) (fun x : α => x + x)
+
+example : (12 : Nat) = sumDouble [1,2,3] := rfl
+
+structure Adder where
+  howMuch : Nat
+
+def add5 : Adder := ⟨5⟩
+
+/-
+#eval add5 3
+/-
+function expected at
+  add5
+term has type
+  Adder
+-/
+-/
+
+/--
+Structure `Adder` ∋ { howMuch := $n$ }を関数$λx. x + n$に強制する
+-/
+instance : CoeFun Adder (fun _ => Nat → Nat) where
+  coe adder := (· + adder.howMuch)
+
+example : 8 = add5 3 := rfl
